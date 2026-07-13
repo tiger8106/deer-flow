@@ -224,37 +224,68 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.9855 0.0098 87.47);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0.0098 87.47);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0.0098 87.47);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.9455 0.0098 87.47);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0.0098 87.47);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.94 0.0098 87.47);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+
+  /* 页面基础 */
+  --background: oklch(98.51% 0 0);              /* #F9F9F9 */
+  --foreground: oklch(13.7% 0 0);               /* #0D0D0D */
+
+  /* 卡片 / 面板 */
+  --card: oklch(100% 0 0);                      /* #FFFFFF */
+  --card-foreground: oklch(13.7% 0 0);          /* #0D0D0D */
+
+  /* 浮层 */
+  --popover: oklch(100% 0 0);                   /* #FFFFFF */
+  --popover-foreground: oklch(13.7% 0 0);       /* #0D0D0D */
+
+  /* 主按钮 / 强操作 */
+  --primary: oklch(13.7% 0 0);                  /* #0D0D0D */
+  --primary-foreground: oklch(100% 0 0);        /* #FFFFFF */
+
+  /* 次级区域 */
+  --secondary: oklch(96.7% 0 0);                /* #F3F3F3 */
+  --secondary-foreground: oklch(20.5% 0 0);     /* #1A1A1A */
+
+  /* 弱化区域 */
+  --muted: oklch(95.8% 0 0);                    /* #F0F0F0 */
+  --muted-foreground: oklch(53.5% 0 0);         /* #6B6B6B */
+
+  /* hover / 轻强调 */
+  --accent: oklch(94.9% 0 0);                   /* #EDEDED */
+  --accent-foreground: oklch(13.7% 0 0);        /* #0D0D0D */
+
+  /* 删除 / 报错 */
+  --destructive: oklch(57.7% 0.215 27.3);       /* 接近 #EF4444 */
+
+  /* 边框 / 输入框 / 焦点 */
   --border: oklch(0.922 0.0098 87.47);
   --input: oklch(0.88 0.0098 87.47);
-  --ring: oklch(0.58 0.18 255);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.965 0.0098 87.47);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0.0098 87.47);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.925 0.0098 87.47);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0.0098 87.47);
-  --sidebar-ring: oklch(0.708 0 0);
+  --ring: transparent;
+
+  /* 图表色 */
+  --chart-1: oklch(64.6% 0.222 41.1);           /* 橙色 */
+  --chart-2: oklch(60.0% 0.118 184.7);          /* 青绿色 */
+  --chart-3: oklch(39.8% 0.070 227.4);          /* 深蓝 */
+  --chart-4: oklch(82.8% 0.189 84.4);           /* 黄色 */
+  --chart-5: oklch(76.9% 0.188 70.1);           /* 浅橙 */
+
+  /* 侧边栏 */
+  --sidebar: oklch(97.99% 0.0014 286.38);       /* #F7F7F8 */
+  --sidebar-foreground: oklch(25.0% 0 0);       /* #262626 */
+
+  /* 侧边栏主强调 */
+  --sidebar-primary: oklch(13.7% 0 0);          /* #0D0D0D */
+  --sidebar-primary-foreground: oklch(100% 0 0);/* #FFFFFF */
+
+  /* 侧边栏 hover / 选中 */
+  --sidebar-accent: oklch(94.5% 0 0);           /* #EBEBEB */
+  --sidebar-accent-foreground: oklch(13.7% 0 0);/* #0D0D0D */
+
+  /* 侧边栏边框 / focus */
+  --sidebar-border: oklch(91.5% 0 0);           /* #E3E3E3 */
+  --sidebar-ring: oklch(70.8% 0 0);             /* #A3A3A3 */
+
+  /* 圆角 */
+  --radius: 0.75rem;
 }
 
 .dark {

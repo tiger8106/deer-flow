@@ -373,7 +373,7 @@ export default function ChatPage() {
                   {mountedRef.current ? (
                     <InputBox
                       className={cn(
-                        "bg-background/5 w-full",
+                        "bg-background w-full",
                         isWelcomeMode && "-translate-y-2 sm:-translate-y-4",
                       )}
                       isWelcomeMode={isWelcomeMode}

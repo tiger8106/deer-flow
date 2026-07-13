@@ -40,11 +40,11 @@ export function Welcome({
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-full flex-col items-center justify-center gap-2 px-4 py-4 text-center sm:px-8",
+        "mx-auto flex w-full max-w-full flex-col items-center justify-center gap-2 px-4 py-10 text-center sm:px-8",
         className,
       )}
     >
-      <div className="max-w-full text-2xl font-bold">
+      <div className="max-w-full text-2xl font">
         {searchParams.get("mode") === "skill" ? (
           `✨ ${t.welcome.createYourOwnSkill} ✨`
         ) : (
@@ -62,11 +62,7 @@ export function Welcome({
             {t.welcome.createYourOwnSkillDescription}
           </WelcomeDescription>
         </div>
-      ) : (
-        <div className="text-muted-foreground max-w-full text-sm">
-          <WelcomeDescription>{t.welcome.description}</WelcomeDescription>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
