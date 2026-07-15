@@ -7,13 +7,17 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { isSidePanelPreviewURL } from "@/core/citations/side-panel-preview";
 import { cn } from "@/lib/utils";
+
+import { useMaybeExternalPreview } from "../external-preview";
 
 export function CitationLink({
   href,
   children,
   ...props
 }: ComponentProps<"a">) {
+  const externalPreview = useMaybeExternalPreview();
   const domain = extractDomain(href ?? "");
 
   // Priority: children > domain
@@ -22,17 +26,30 @@ export function CitationLink({
       ? children.replace(/^citation:\s*/i, "")
       : null;
   const isGenericText = childrenText === "Source" || childrenText === "来源";
-  const displayText = (!isGenericText && childrenText) ?? domain;
+  const rawDisplayText = (!isGenericText && childrenText) ?? domain;
+  const displayText = /^\d+$/.test(rawDisplayText || "")
+    ? `[${rawDisplayText}]`
+    : rawDisplayText;
+  const opensSidePanel = isSidePanelPreviewURL(href);
 
   return (
     <HoverCard closeDelay={0} openDelay={0}>
       <HoverCardTrigger asChild>
         <a
           href={href}
-          target="_blank"
-          rel="noopener noreferrer"
+          target={opensSidePanel ? undefined : "_blank"}
+          rel={opensSidePanel ? undefined : "noopener noreferrer"}
           className="inline-flex items-center"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (opensSidePanel && href && externalPreview) {
+              event.preventDefault();
+              externalPreview.open({
+                url: href,
+                title: displayText || domain || "Preview",
+              });
+            }
+          }}
           {...props}
         >
           <Badge
@@ -64,7 +81,7 @@ export function CitationLink({
             rel="noopener noreferrer"
             className="text-primary mt-2 inline-flex items-center gap-1 text-xs hover:underline"
           >
-            Visit source
+            {opensSidePanel ? "Open preview" : "Visit source"}
             <ExternalLinkIcon className="size-3" />
           </a>
         </div>

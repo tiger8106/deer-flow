@@ -85,6 +85,13 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
 
 ### Interaction Ownership
 
+- `components/workspace/external-preview` owns generic right-panel iframe
+  state. Citation URLs opt in only with `preview=side-panel`; domain-specific
+  preview, navigation, and highlighting remain in the external module.
+- `components/workspace/chats/chat-box.tsx` arbitrates external preview,
+  sidecar, and artifact panels in that priority order and handles same-origin
+  `tiger:close-preview` messages from the embedded page.
+
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns composer busy-state wiring.
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns branch-from-turn submission and navigation; sidecar `MessageList` instances do not receive the branch action.
 - `src/app/workspace/chats/[thread_id]/page.tsx` and `src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx` own active-goal display state for their composer overlays.

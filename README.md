@@ -131,6 +131,14 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
 
    > **Advanced / manual configuration**: If you prefer to edit `config.yaml` directly, run `make config` instead to copy the full template. See `config.example.yaml` for the complete reference including CLI-backed providers (Codex CLI, Claude Code OAuth), OpenRouter, Responses API, and more.
 
+   Application modules may declare zero-argument LangChain `AgentMiddleware`
+   implementations under `extensions_config.json -> middlewares` or
+   `DEER_FLOW_AGENT_MIDDLEWARES`. The harness resolves each
+   class path through the standard custom-middleware boundary, so business
+   packages remain outside the DeerFlow source tree. Citation links that set
+   `preview=side-panel` opt into the generic external-preview panel; ordinary
+   citation URLs keep the standard external-link behavior.
+
    <details>
    <summary>Manual model configuration examples</summary>
 

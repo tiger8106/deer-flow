@@ -21,6 +21,7 @@ middleware, and the async path inside ``TitleMiddleware``. Any new in-graph
 from __future__ import annotations
 
 import logging
+import os
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware
@@ -60,6 +61,24 @@ _NON_INTERACTIVE_DISABLED_TOOL_NAMES = frozenset({"ask_clarification"})
 # itself is plumbed into ``run_context`` by
 # ``ChannelManager._resolve_run_params``.
 _WEBHOOK_CHANNELS: frozenset[str] = frozenset({"github"})
+
+
+def load_extension_middlewares(app_config: AppConfig) -> list[AgentMiddleware]:
+    """Instantiate application middlewares declared in ``extensions``.
+
+    This is the narrow integration boundary for business modules: DeerFlow
+    knows only the standard ``AgentMiddleware`` contract and never imports a
+    module-specific package directly.
+    """
+    from deerflow.reflection import resolve_class
+
+    configured_paths = list(app_config.extensions.middlewares)
+    configured_paths.extend(item.strip() for item in os.getenv("DEER_FLOW_AGENT_MIDDLEWARES", "").split(",") if item.strip())
+    middlewares: list[AgentMiddleware] = []
+    for class_path in dict.fromkeys(configured_paths):
+        middleware_class = resolve_class(class_path, AgentMiddleware)
+        middlewares.append(middleware_class())
+    return middlewares
 
 
 def _append_memory_tools_without_name_conflicts(tools: list) -> None:
@@ -426,6 +445,7 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
 
     cfg = _get_runtime_config(config)
     resolved_app_config = app_config
+    extension_middlewares = load_extension_middlewares(resolved_app_config)
 
     # Extract user_id for user-scoped skill loading.
     # LangGraph gateway injects user_id into config["configurable"];
@@ -546,6 +566,7 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
                 deferred_setup=setup,
                 mcp_routing_middleware=mcp_routing_middleware,
                 user_id=resolved_user_id,
+                custom_middlewares=extension_middlewares,
             ),
             system_prompt=apply_prompt_template(
                 subagent_enabled=subagent_enabled,
@@ -612,6 +633,7 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
             deferred_setup=setup,
             mcp_routing_middleware=mcp_routing_middleware,
             user_id=resolved_user_id,
+            custom_middlewares=extension_middlewares,
         ),
         system_prompt=apply_prompt_template(
             subagent_enabled=subagent_enabled,

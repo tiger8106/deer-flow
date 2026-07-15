@@ -9,6 +9,8 @@ import {
 import { useSidebar } from "@/components/ui/sidebar";
 import { env } from "@/env";
 
+import { ExternalPreviewProvider } from "../external-preview";
+
 export interface ArtifactsContextType {
   artifacts: string[];
   setArtifacts: (artifacts: string[]) => void;
@@ -81,9 +83,11 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
   };
 
   return (
-    <ArtifactsContext.Provider value={value}>
-      {children}
-    </ArtifactsContext.Provider>
+    <ExternalPreviewProvider>
+      <ArtifactsContext.Provider value={value}>
+        {children}
+      </ArtifactsContext.Provider>
+    </ExternalPreviewProvider>
   );
 }
 

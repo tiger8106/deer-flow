@@ -881,6 +881,16 @@ For models with `supports_vision: true`:
 
 ## Code Style
 
+### Application middleware extensions
+
+`extensions_config.json -> middlewares` and `DEER_FLOW_AGENT_MIDDLEWARES` are
+the config-driven boundaries for external business modules. Entries are import paths to zero-argument
+`AgentMiddleware` subclasses. `lead_agent.agent.load_extension_middlewares`
+resolves them with the shared reflection helper and passes the instances to
+`build_middlewares(custom_middlewares=...)`; DeerFlow code must not import the
+business package directly. Add loader tests under `backend/tests/` for changes
+to this contract.
+
 - Uses `ruff` for linting and formatting
 - Line length: 240 characters
 - Python 3.12+ with type hints

@@ -20,12 +20,13 @@ import {
   ArtifactFileList,
   useArtifacts,
 } from "../artifacts";
+import { useExternalPreview } from "../external-preview";
 import { useThread } from "../messages/context";
 import { SidecarPanel, useMaybeSidecar } from "../sidecar";
 
 const RIGHT_PANEL_ANIMATION_MS = 280;
 
-type RightPanelKind = "sidecar" | "artifacts";
+type RightPanelKind = "external-preview" | "sidecar" | "artifacts";
 
 const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   children,
@@ -47,6 +48,8 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   } = useArtifacts();
   const sidecar = useMaybeSidecar();
   const sidecarOpen = sidecar?.open ?? false;
+  const externalPreview = useExternalPreview();
+  const externalPreviewOpen = externalPreview.preview !== null;
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
@@ -93,20 +96,22 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   ]);
 
   const artifactPanelOpen = useMemo(() => {
-    if (sidecarOpen) {
+    if (sidecarOpen || externalPreviewOpen) {
       return false;
     }
     if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true") {
       return artifactsOpen && artifacts?.length > 0;
     }
     return artifactsOpen;
-  }, [artifactsOpen, artifacts, sidecarOpen]);
+  }, [artifactsOpen, artifacts, externalPreviewOpen, sidecarOpen]);
 
-  const activeRightPanel: RightPanelKind | null = sidecarOpen
-    ? "sidecar"
-    : artifactPanelOpen
-      ? "artifacts"
-      : null;
+  const activeRightPanel: RightPanelKind | null = externalPreviewOpen
+    ? "external-preview"
+    : sidecarOpen
+      ? "sidecar"
+      : artifactPanelOpen
+        ? "artifacts"
+        : null;
   const rightPanelOpen = activeRightPanel !== null;
   const [renderedRightPanel, setRenderedRightPanel] =
     useState<RightPanelKind | null>(activeRightPanel);
@@ -136,7 +141,29 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     }
   }, [artifactsOpen, setArtifactsOpen, sidecarOpen]);
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.origin === window.location.origin &&
+        event.data?.type === "tiger:close-preview"
+      ) {
+        externalPreview.close();
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [externalPreview]);
+
   const rightPanelContent = useMemo(() => {
+    if (renderedRightPanel === "external-preview" && externalPreview.preview) {
+      return (
+        <iframe
+          className="size-full border-0"
+          src={externalPreview.preview.url}
+          title={externalPreview.preview.title}
+        />
+      );
+    }
     if (renderedRightPanel === "sidecar") {
       return <SidecarPanel />;
     }
@@ -192,6 +219,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     selectedArtifact,
     threadId,
     artifacts,
+    externalPreview.preview,
     setArtifactsOpen,
   ]);
 
@@ -208,6 +236,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
             if (sidecarOpen) {
               sidecar?.close();
             }
+            if (externalPreviewOpen) {
+              externalPreview.close();
+            }
             if (artifactsOpen) {
               setArtifactsOpen(false);
             }
@@ -219,7 +250,11 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
           >
             <SheetHeader className="sr-only">
               <SheetTitle>
-                {renderedRightPanel === "sidecar" ? "Sidecar" : "Artifacts"}
+                {renderedRightPanel === "external-preview"
+                  ? "Preview"
+                  : renderedRightPanel === "sidecar"
+                    ? "Sidecar"
+                    : "Artifacts"}
               </SheetTitle>
               <SheetDescription>
                 Browse the side panel for this conversation.
@@ -264,7 +299,10 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
         <div
           className={cn(
             "ml-auto h-full w-[40cqw] transition-opacity duration-[280ms] ease-out motion-reduce:transition-none",
-            renderedRightPanel === "sidecar" ? "p-0" : "p-4",
+            renderedRightPanel === "sidecar" ||
+              renderedRightPanel === "external-preview"
+              ? "p-0"
+              : "p-4",
             rightPanelOpen ? "opacity-100" : "opacity-0",
           )}
         >

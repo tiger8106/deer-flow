@@ -132,6 +132,11 @@ class SkillStateConfig(BaseModel):
 class ExtensionsConfig(BaseModel):
     """Unified configuration for MCP servers and skills."""
 
+    middlewares: list[str] = Field(
+        default_factory=list,
+        description=("Import paths of zero-argument AgentMiddleware extensions loaded after DeerFlow's built-in middleware chain."),
+    )
+
     mcp_servers: dict[str, McpServerConfig] = Field(
         default_factory=dict,
         description="Map of MCP server name to configuration",
