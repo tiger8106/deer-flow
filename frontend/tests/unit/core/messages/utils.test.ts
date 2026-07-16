@@ -153,6 +153,16 @@ test("keeps tool-call reasoning in the processing group while the final answer's
 });
 
 describe("inline <think> tag splitting", () => {
+  test("hides persisted internal citation markers from assistant content", () => {
+    const message = aiMessage(
+      "最终回答。[citation: 1](/knowledge/citation-preview)\n\n<!--CITATIONS:turn_6364af73ef20-->",
+    );
+    expect(extractContentFromMessage(message)).toBe(
+      "最终回答。[citation: 1](/knowledge/citation-preview)",
+    );
+    expect(getMessageCopyData(message)).not.toContain("<!--CITATIONS:");
+  });
+
   test("strips a fully closed <think> block from AI content", () => {
     const message = aiMessage("<think>internal reasoning</think>final answer");
     expect(extractContentFromMessage(message)).toBe("final answer");

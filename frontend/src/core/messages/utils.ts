@@ -312,6 +312,11 @@ export function extractTextFromMessage(message: Message) {
 
 const THINK_OPEN_TAG = "<think>";
 const THINK_TAG_RE = /<think>\s*([\s\S]*?)\s*<\/think>/g;
+const INTERNAL_CITATION_MARKER_RE = /<!--\s*CITATIONS:[A-Za-z0-9_-]+\s*-->/g;
+
+function stripInternalCitationMarkers(content: string) {
+  return content.replace(INTERNAL_CITATION_MARKER_RE, "").trim();
+}
 
 function splitInlineReasoning(content: string) {
   const reasoningParts: string[] = [];
@@ -345,7 +350,9 @@ function splitInlineReasoning(content: string) {
   }
 
   return {
-    content: cleaned.trim(),
+    // Compatibility for messages persisted before citation metadata stopped
+    // being appended to assistant content.
+    content: stripInternalCitationMarkers(cleaned),
     reasoning: reasoningParts.length > 0 ? reasoningParts.join("\n\n") : null,
   };
 }
@@ -365,7 +372,7 @@ export function extractContentFromMessage(message: Message) {
     );
   }
   if (Array.isArray(message.content)) {
-    return message.content
+    const content = message.content
       .map((content) => {
         if (typeof content === "string") {
           return content;
@@ -382,6 +389,9 @@ export function extractContentFromMessage(message: Message) {
       })
       .join("\n")
       .trim();
+    return message.type === "ai"
+      ? stripInternalCitationMarkers(content)
+      : content;
   }
   return "";
 }
@@ -592,7 +602,7 @@ const INTERNAL_MARKER_RE = new RegExp(
  * model about its own ``<memory>`` system).
  */
 export function stripInternalMarkers(content: string): string {
-  return content.replace(INTERNAL_MARKER_RE, "").trim();
+  return stripInternalCitationMarkers(content.replace(INTERNAL_MARKER_RE, ""));
 }
 
 export function parseUploadedFiles(content: string): FileInMessage[] {
