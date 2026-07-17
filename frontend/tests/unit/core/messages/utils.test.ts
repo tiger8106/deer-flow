@@ -10,6 +10,7 @@ import {
   getAssistantTurnUsageMessages,
   getMessageGroups,
   getStreamingMessageLookup,
+  isInternalStreamMetadata,
   hasContent,
   hasReasoning,
   isAssistantMessageGroupStreaming,
@@ -295,6 +296,30 @@ describe("inline <think> tag splitting", () => {
     const message = aiMessage("Documentation: `<think>");
     expect(extractContentFromMessage(message)).toBe("Documentation: `<think>");
     expect(extractReasoningContentFromMessage(message)).toBeNull();
+  });
+});
+
+describe("internal model stream filtering", () => {
+  test("hides middleware callers, tags, nostream calls and known internal runs", () => {
+    expect(isInternalStreamMetadata({ caller: "middleware:citations" })).toBe(
+      true,
+    );
+    expect(isInternalStreamMetadata({ tags: ["middleware:citations"] })).toBe(
+      true,
+    );
+    expect(isInternalStreamMetadata({ tags: ["nostream"] })).toBe(true);
+    expect(isInternalStreamMetadata({ run_name: "citations_highlight" })).toBe(
+      true,
+    );
+  });
+
+  test("keeps the lead agent answer stream visible", () => {
+    expect(
+      isInternalStreamMetadata({
+        run_name: "lead_agent",
+        tags: ["seq:step:3"],
+      }),
+    ).toBe(false);
   });
 });
 

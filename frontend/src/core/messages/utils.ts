@@ -207,6 +207,33 @@ export type StreamingMessageLookup = {
   messages: ReadonlySet<Message>;
 };
 
+const INTERNAL_STREAM_RUN_NAMES = new Set([
+  "citations_highlight",
+  "memory_agent",
+  "summary_agent",
+  "title_agent",
+]);
+
+export function isInternalStreamMetadata(
+  metadata: Record<string, unknown> | undefined,
+) {
+  if (!metadata) return false;
+  const caller = metadata.caller;
+  if (typeof caller === "string" && caller.startsWith("middleware:")) {
+    return true;
+  }
+  const runName = metadata.run_name ?? metadata.name;
+  if (typeof runName === "string" && INTERNAL_STREAM_RUN_NAMES.has(runName)) {
+    return true;
+  }
+  const tags = Array.isArray(metadata.tags) ? metadata.tags : [];
+  return tags.some(
+    (tag) =>
+      typeof tag === "string" &&
+      (tag === "nostream" || tag.startsWith("middleware:")),
+  );
+}
+
 export function getStreamingMessageLookup(
   messages: Message[],
   isStreaming: boolean,

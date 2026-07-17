@@ -18,7 +18,10 @@ import { getAPIClient } from "../api";
 import { fetch } from "../api/fetcher";
 import { getBackendBaseURL } from "../config";
 import { useI18n } from "../i18n/hooks";
-import { isHiddenFromUIMessage } from "../messages/utils";
+import {
+  isHiddenFromUIMessage,
+  isInternalStreamMetadata,
+} from "../messages/utils";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
 import { isSidecarThread, SIDECAR_METADATA_KEY } from "../sidecar/thread";
@@ -1097,15 +1100,28 @@ export function useThreadStream({
 
   const hasVisibleStreamState =
     Boolean(threadId) || liveMessagesThreadId === currentViewThreadId;
+  const liveMessages = thread.messages;
+  const getLiveMessageMetadata = thread.getMessagesMetadata;
   const persistedMessages = useMemo(
     () =>
       hasVisibleStreamState
-        ? thread.messages.filter(
-            (message) =>
-              !message.id || !pendingSupersededMessageIds.has(message.id),
-          )
+        ? liveMessages.filter((message, index) => {
+            const streamMetadata = getLiveMessageMetadata(
+              message,
+              index,
+            )?.streamMetadata;
+            if (isInternalStreamMetadata(streamMetadata)) {
+              return false;
+            }
+            return !message.id || !pendingSupersededMessageIds.has(message.id);
+          })
         : [],
-    [hasVisibleStreamState, pendingSupersededMessageIds, thread.messages],
+    [
+      hasVisibleStreamState,
+      getLiveMessageMetadata,
+      liveMessages,
+      pendingSupersededMessageIds,
+    ],
   );
   const visibleHistory = useMemo(
     () => (threadId ? history : []),
