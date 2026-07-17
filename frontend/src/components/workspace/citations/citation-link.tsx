@@ -53,8 +53,8 @@ export function CitationLink({
           {...props}
         >
           <Badge
-            variant="secondary"
-            className="hover:bg-secondary/80 mx-0.5 cursor-pointer gap-1 rounded-full px-2 py-0.5 text-xs font-normal"
+            variant="outline"
+            className="mx-0.5 cursor-pointer gap-1 rounded-full border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/60"
           >
             {displayText}
             <ExternalLinkIcon className="size-3" />
