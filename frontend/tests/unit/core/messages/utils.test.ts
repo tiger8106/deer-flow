@@ -187,6 +187,24 @@ describe("inline <think> tag splitting", () => {
     expect(getMessageCopyData(message)).not.toContain("<!--CITATIONS:");
   });
 
+  test("never exposes raw citation anchors and source appendix after streaming", () => {
+    const message = aiMessage(
+      "正文内容<a>[1]</a>。\n\n---\n引用来源：\n[1] 制度.pdf（第2页）\n\n<!--CITATIONS:tool_123-->",
+    );
+
+    expect(extractContentFromMessage(message)).toBe("正文内容。");
+  });
+
+  test("keeps finalized citation links available after streaming", () => {
+    const message = aiMessage(
+      "正文内容。[citation: 1](/knowledge/citation-preview?document_id=doc-1)",
+    );
+
+    expect(extractContentFromMessage(message)).toBe(
+      "正文内容。[citation: 1](/knowledge/citation-preview?document_id=doc-1)",
+    );
+  });
+
   test("strips a fully closed <think> block from AI content", () => {
     const message = aiMessage("<think>internal reasoning</think>final answer");
     expect(extractContentFromMessage(message)).toBe("final answer");

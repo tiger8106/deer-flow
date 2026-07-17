@@ -314,19 +314,26 @@ const THINK_OPEN_TAG = "<think>";
 const THINK_TAG_RE = /<think>\s*([\s\S]*?)\s*<\/think>/g;
 const INTERNAL_CITATION_MARKER_RE = /<!--\s*CITATIONS:[A-Za-z0-9_-]+\s*-->/g;
 const INTERNAL_CITATION_ANCHOR_RE = /<a>\s*\[\d+\]\s*<\/a>/gi;
+const INTERNAL_CITATION_SOURCE_BLOCK_RE =
+  /\n{2,}(?:---\s*\n+)?引用来源[:：]\s*\n(?:\s*\[\d+\][^\n]*(?:\n|$))+(?=\s*(?:<!--(?:\s*CITATIONS(?::[A-Za-z0-9_-]*)?)?|$))/gi;
 const RENDERED_CITATION_LINK_RE =
   /(?<!!)\[citation:\s*[^\]]+?\]\((?:[^\s()]|\([^\s()]*\))+\)/gi;
+const TRAILING_INTERNAL_PLACEHOLDER_RE =
+  /(?:<a(?:>\s*(?:\[\s*\d*\s*(?:\]\s*(?:<\/?a?)?)?)?)?|<!--(?:\s*CITATIONS(?::[A-Za-z0-9_-]*)?)?)$/i;
 const TRAILING_INTERNAL_CITATION_RE =
   /(?:<a(?:>\s*(?:\[\s*\d*\s*(?:\]\s*(?:<\/?a?)?)?)?)?|\[citation:[^\n]*)$/i;
 
 function stripInternalCitationMarkers(content: string) {
-  return content.replace(INTERNAL_CITATION_MARKER_RE, "").trim();
+  return content
+    .replace(INTERNAL_CITATION_SOURCE_BLOCK_RE, "")
+    .replace(INTERNAL_CITATION_MARKER_RE, "")
+    .replace(INTERNAL_CITATION_ANCHOR_RE, "")
+    .replace(TRAILING_INTERNAL_PLACEHOLDER_RE, "")
+    .trim();
 }
 
 export function stripCitationMarkupWhileStreaming(content: string) {
-  return content
-    .replace(INTERNAL_CITATION_MARKER_RE, "")
-    .replace(INTERNAL_CITATION_ANCHOR_RE, "")
+  return stripInternalCitationMarkers(content)
     .replace(RENDERED_CITATION_LINK_RE, "")
     .replace(TRAILING_INTERNAL_CITATION_RE, "")
     .trimEnd();
