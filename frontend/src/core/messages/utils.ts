@@ -313,9 +313,23 @@ export function extractTextFromMessage(message: Message) {
 const THINK_OPEN_TAG = "<think>";
 const THINK_TAG_RE = /<think>\s*([\s\S]*?)\s*<\/think>/g;
 const INTERNAL_CITATION_MARKER_RE = /<!--\s*CITATIONS:[A-Za-z0-9_-]+\s*-->/g;
+const INTERNAL_CITATION_ANCHOR_RE = /<a>\s*\[\d+\]\s*<\/a>/gi;
+const RENDERED_CITATION_LINK_RE =
+  /(?<!!)\[citation:\s*[^\]]+?\]\((?:[^\s()]|\([^\s()]*\))+\)/gi;
+const TRAILING_INTERNAL_CITATION_RE =
+  /(?:<a(?:>\s*(?:\[\s*\d*\s*(?:\]\s*(?:<\/?a?)?)?)?)?|\[citation:[^\n]*)$/i;
 
 function stripInternalCitationMarkers(content: string) {
   return content.replace(INTERNAL_CITATION_MARKER_RE, "").trim();
+}
+
+export function stripCitationMarkupWhileStreaming(content: string) {
+  return content
+    .replace(INTERNAL_CITATION_MARKER_RE, "")
+    .replace(INTERNAL_CITATION_ANCHOR_RE, "")
+    .replace(RENDERED_CITATION_LINK_RE, "")
+    .replace(TRAILING_INTERNAL_CITATION_RE, "")
+    .trimEnd();
 }
 
 function splitInlineReasoning(content: string) {

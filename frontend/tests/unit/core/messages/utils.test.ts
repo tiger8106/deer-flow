@@ -13,6 +13,7 @@ import {
   hasContent,
   hasReasoning,
   isAssistantMessageGroupStreaming,
+  stripCitationMarkupWhileStreaming,
   stripUploadedFilesTag,
 } from "@/core/messages/utils";
 
@@ -153,6 +154,29 @@ test("keeps tool-call reasoning in the processing group while the final answer's
 });
 
 describe("inline <think> tag splitting", () => {
+  test("hides internal citation anchors and markers while streaming", () => {
+    const content =
+      "第一条内容<a>[1]</a>\n第二条内容<a>[2]</a>\n<!--CITATIONS:tool_123-->";
+
+    expect(stripCitationMarkupWhileStreaming(content)).toBe(
+      "第一条内容\n第二条内容",
+    );
+  });
+
+  test("hides rendered and partial citations until streaming completes", () => {
+    expect(
+      stripCitationMarkupWhileStreaming(
+        "正文 [citation: 1](http://localhost:2026/knowledge/citation-preview?document_id=doc-1)",
+      ),
+    ).toBe("正文");
+    expect(stripCitationMarkupWhileStreaming("正文<a>[1")).toBe("正文");
+    expect(
+      stripCitationMarkupWhileStreaming(
+        "正文 [citation: 1](http://localhost:2026/knowledge/citation-preview",
+      ),
+    ).toBe("正文");
+  });
+
   test("hides persisted internal citation markers from assistant content", () => {
     const message = aiMessage(
       "最终回答。[citation: 1](/knowledge/citation-preview)\n\n<!--CITATIONS:turn_6364af73ef20-->",

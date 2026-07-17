@@ -42,6 +42,7 @@ import {
   extractReasoningContentFromMessage,
   getMessageCopyData,
   parseUploadedFiles,
+  stripCitationMarkupWhileStreaming,
   stripUploadedFilesTag,
   type FileInMessage,
 } from "@/core/messages/utils";
@@ -368,11 +369,15 @@ function MessageContent_({
     if (isHuman) {
       return rawContent ? stripUploadedFilesTag(rawContent) : "";
     }
-    return rawContent ?? "";
-  }, [rawContent, isHuman]);
+    const assistantContent = rawContent ?? "";
+    return isLoading
+      ? stripCitationMarkupWhileStreaming(assistantContent)
+      : assistantContent;
+  }, [rawContent, isHuman, isLoading]);
   const citationSources = useMemo(
-    () => (isHuman ? [] : extractCitationSources(contentToDisplay)),
-    [contentToDisplay, isHuman],
+    () =>
+      isHuman || isLoading ? [] : extractCitationSources(contentToDisplay),
+    [contentToDisplay, isHuman, isLoading],
   );
 
   const filesList =
@@ -466,7 +471,7 @@ function MessageContent_({
         className="my-3"
         components={components}
       />
-      <CitationSourcesPanel sources={citationSources} />
+      {!isLoading && <CitationSourcesPanel sources={citationSources} />}
       {message.type === "ai" && (
         <WorkspaceChangeBadge
           threadId={threadId}
