@@ -31,6 +31,7 @@ const HIDDEN_CONTROL_MESSAGE_NAMES = new Set([
   "loop_warning",
   "todo_reminder",
   "todo_completion_reminder",
+  "knowledge_retrieval_guard",
 ]);
 
 export function getMessageGroups(messages: Message[]): MessageGroup[] {
@@ -575,8 +576,11 @@ export function findToolCallResult(toolCallId: string, messages: Message[]) {
 
 export function isHiddenFromUIMessage(message: Message) {
   const content = extractTextFromMessage(message);
+  const messageId = typeof message.id === "string" ? message.id : "";
   return (
     message.additional_kwargs?.hide_from_ui === true ||
+    message.additional_kwargs?.dynamic_context_reminder === true ||
+    (message.type === "human" && messageId.endsWith("__memory")) ||
     (typeof message.name === "string" &&
       HIDDEN_CONTROL_MESSAGE_NAMES.has(message.name)) ||
     (message.type === "human" &&

@@ -11,6 +11,7 @@ import {
   getMessageGroups,
   getStreamingMessageLookup,
   isInternalStreamMetadata,
+  isHiddenFromUIMessage,
   hasContent,
   hasReasoning,
   isAssistantMessageGroupStreaming,
@@ -25,6 +26,33 @@ function aiMessage(content: string): Message {
     content,
   } as Message;
 }
+
+test("hides injected memory and knowledge guard messages without relying on content", () => {
+  const injectedMemory = {
+    id: "thread-1__memory",
+    type: "human",
+    content: "<memory>internal memory</memory>",
+  } as Message;
+  const dynamicContext = {
+    id: "dynamic-1",
+    type: "human",
+    content: "internal dynamic context",
+    additional_kwargs: { dynamic_context_reminder: true },
+  } as Message;
+  const knowledgeGuard = {
+    id: "guard-1",
+    type: "human",
+    name: "knowledge_retrieval_guard",
+    content: "internal retrieval instructions",
+  } as Message;
+
+  expect(isHiddenFromUIMessage(injectedMemory)).toBe(true);
+  expect(isHiddenFromUIMessage(dynamicContext)).toBe(true);
+  expect(isHiddenFromUIMessage(knowledgeGuard)).toBe(true);
+  expect(
+    getMessageGroups([injectedMemory, dynamicContext, knowledgeGuard]),
+  ).toEqual([]);
+});
 
 test("aggregates token usage messages once per assistant turn", () => {
   const messages = [
