@@ -7,7 +7,10 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import { isSidePanelPreviewURL } from "@/core/citations/side-panel-preview";
+import {
+  getSidePanelPreviewTitle,
+  isSidePanelPreviewURL,
+} from "@/core/citations/side-panel-preview";
 import { cn } from "@/lib/utils";
 
 import { useMaybeExternalPreview } from "../external-preview";
@@ -31,6 +34,8 @@ export function CitationLink({
     ? `[${rawDisplayText}]`
     : rawDisplayText;
   const opensSidePanel = isSidePanelPreviewURL(href);
+  const previewTitle = getSidePanelPreviewTitle(href);
+  const sourceTitle = previewTitle ?? displayText;
 
   return (
     <HoverCard closeDelay={0} openDelay={0}>
@@ -46,7 +51,7 @@ export function CitationLink({
               event.preventDefault();
               externalPreview.open({
                 url: href,
-                title: displayText || domain || "Preview",
+                title: sourceTitle || domain || "Preview",
               });
             }
           }}
@@ -64,12 +69,12 @@ export function CitationLink({
       <HoverCardContent className={cn("relative w-80 p-0", props.className)}>
         <div className="p-3">
           <div className="space-y-1">
-            {displayText && (
+            {sourceTitle && (
               <h4 className="truncate text-sm leading-tight font-medium">
-                {displayText}
+                {sourceTitle}
               </h4>
             )}
-            {href && (
+            {href && !previewTitle && (
               <p className="text-muted-foreground truncate text-xs break-all">
                 {href}
               </p>

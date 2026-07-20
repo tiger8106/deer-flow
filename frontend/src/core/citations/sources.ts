@@ -1,3 +1,5 @@
+import { getSidePanelPreviewTitle } from "./side-panel-preview";
+
 export type CitationOccurrence = {
   index: number;
   title: string;
@@ -39,7 +41,8 @@ export function extractCitationSources(markdown: string): CitationSource[] {
     }
 
     const domain = extractDomain(url);
-    const title = normalizeTitle(rawTitle, domain);
+    const title =
+      getSidePanelPreviewTitle(url) ?? normalizeTitle(rawTitle, domain);
     const index = match.index ?? 0;
     const existing = sourcesByUrl.get(url);
 

@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { getSidePanelPreviewTitle } from "@/core/citations/side-panel-preview";
 import {
   formatCitationMarkdownReference,
   type CitationSource,
@@ -59,9 +60,11 @@ export function CitationSourcesPanel({
                 <span className="text-foreground block truncate font-medium">
                   {source.title}
                 </span>
-                <span className="text-muted-foreground block truncate">
-                  {source.domain}
-                </span>
+                {!getSidePanelPreviewTitle(source.url) && (
+                  <span className="text-muted-foreground block truncate">
+                    {source.domain}
+                  </span>
+                )}
               </span>
               <span className="text-muted-foreground shrink-0">
                 {t.citations.citeCount(source.count)}

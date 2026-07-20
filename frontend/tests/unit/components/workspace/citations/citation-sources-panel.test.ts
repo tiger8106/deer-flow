@@ -67,6 +67,27 @@ describe("CitationSourcesPanel", () => {
     expect(html).toContain("Copy Paper A reference");
     expect(html).toContain('data-copied-label="Copied Paper A reference"');
   });
+
+  it("shows a side-panel document title without the internal host", () => {
+    const previewUrl =
+      "http://localhost/knowledge/citation-preview?preview=side-panel&title=%E6%9D%90%E6%96%99%E6%8E%A5%E8%A7%A6%E5%BA%94%E5%8A%9B.pdf";
+    const html = renderPanel(
+      [
+        {
+          id: previewUrl,
+          title: "材料接触应力.pdf",
+          url: previewUrl,
+          domain: "localhost",
+          count: 1,
+          occurrences: [{ index: 0, title: "材料接触应力.pdf" }],
+        },
+      ],
+      "zh-CN",
+    );
+
+    expect(html).toContain("材料接触应力.pdf");
+    expect(html).not.toContain(">localhost</span>");
+  });
 });
 
 function renderPanel(

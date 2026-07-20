@@ -128,6 +128,16 @@ describe("extractCitationSources", () => {
       url: "https://www.example.com/path",
     });
   });
+
+  it("uses the document title carried by a side-panel preview URL", () => {
+    const markdown =
+      "See [citation:1](http://localhost/knowledge/citation-preview?preview=side-panel&title=%E6%9D%90%E6%96%99%E6%8E%A5%E8%A7%A6%E5%BA%94%E5%8A%9B.pdf).";
+
+    expect(extractCitationSources(markdown)[0]).toMatchObject({
+      title: "材料接触应力.pdf",
+      domain: "localhost",
+    });
+  });
 });
 
 describe("formatCitationMarkdownReference", () => {
