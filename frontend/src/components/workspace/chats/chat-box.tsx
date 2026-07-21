@@ -51,9 +51,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const sidecarOpen = sidecar?.open ?? false;
   const externalPreview = useExternalPreview();
   const externalPreviewOpen = externalPreview.preview !== null;
+  const externalPreviewRequestId = externalPreview.preview?.requestId;
   const [externalPreviewFullscreen, setExternalPreviewFullscreen] =
     useState(false);
   const [rightPanelPercent, setRightPanelPercent] = useState(40);
+  const [isResizingPreview, setIsResizingPreview] = useState(false);
+  const resizeFrameRef = useRef<number | null>(null);
+  const pendingPercentRef = useRef(40);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
@@ -146,6 +150,11 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   }, [artifactsOpen, setArtifactsOpen, sidecarOpen]);
 
   useEffect(() => {
+    setRightPanelPercent(40);
+    setExternalPreviewFullscreen(false);
+  }, [externalPreviewRequestId]);
+
+  useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (
         event.origin === window.location.origin &&
@@ -153,12 +162,14 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       ) {
         externalPreview.close();
         setExternalPreviewFullscreen(false);
+        setRightPanelPercent(40);
       }
       if (
         event.origin === window.location.origin &&
-        event.data?.type === "tiger:toggle-preview-fullscreen"
+        event.data?.type === "tiger:set-preview-fullscreen" &&
+        typeof event.data.fullscreen === "boolean"
       ) {
-        setExternalPreviewFullscreen((current) => !current);
+        setExternalPreviewFullscreen(event.data.fullscreen);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -245,16 +256,29 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     event.preventDefault();
     const container = event.currentTarget.parentElement;
     if (!container) return;
+    pendingPercentRef.current = rightPanelPercent;
     const handleMove = (moveEvent: PointerEvent) => {
       const bounds = container.getBoundingClientRect();
       const percent = ((bounds.right - moveEvent.clientX) / bounds.width) * 100;
-      setRightPanelPercent(clampPreviewPanelPercent(percent));
+      pendingPercentRef.current = clampPreviewPanelPercent(percent);
+      if (resizeFrameRef.current !== null) return;
+      resizeFrameRef.current = requestAnimationFrame(() => {
+        resizeFrameRef.current = null;
+        setRightPanelPercent(pendingPercentRef.current);
+      });
     };
     const handleUp = () => {
       window.removeEventListener("pointermove", handleMove);
+      if (resizeFrameRef.current !== null) {
+        cancelAnimationFrame(resizeFrameRef.current);
+        resizeFrameRef.current = null;
+      }
+      setRightPanelPercent(pendingPercentRef.current);
+      setIsResizingPreview(false);
       document.body.style.removeProperty("cursor");
       document.body.style.removeProperty("user-select");
     };
+    setIsResizingPreview(true);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", handleMove);
@@ -309,7 +333,8 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     <div
       id={`${resizableIdBase}-panels`}
       className={cn(
-        "[container-type:inline-size] grid size-full min-h-0 transition-[grid-template-columns] duration-[280ms] ease-out motion-reduce:transition-none",
+        "[container-type:inline-size] grid size-full min-h-0 transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        isResizingPreview && "transition-none",
         rightPanelOpen
           ? "grid-cols-[minmax(0,1fr)_1px_minmax(0,40%)]"
           : "grid-cols-[minmax(0,1fr)_0px_0px]",
@@ -324,7 +349,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
           : undefined
       }
     >
-      <div className="relative min-h-0 min-w-0" id="chat">
+      <div
+        className={cn(
+          "relative min-h-0 min-w-0 transition-opacity duration-200",
+          externalPreviewFullscreen && "pointer-events-none opacity-0",
+        )}
+        id="chat"
+      >
         {children}
       </div>
       <div

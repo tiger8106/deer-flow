@@ -8,6 +8,7 @@ import { useThreadChat } from "./chats";
 import { FlipDisplay } from "./flip-display";
 
 export function ThreadTitle({
+  className,
   threadId,
   thread,
 }: {
@@ -43,7 +44,7 @@ export function ThreadTitle({
     return null;
   }
   return (
-    <FlipDisplay uniqueKey={threadId}>
+    <FlipDisplay className={className} uniqueKey={threadId}>
       {thread.values.title ?? "Untitled"}
     </FlipDisplay>
   );

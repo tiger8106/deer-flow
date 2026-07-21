@@ -12,9 +12,10 @@ export function FlipDisplay({
   className?: string;
 }) {
   return (
-    <div className={cn("relative overflow-hidden", className)}>
+    <div className={cn("relative min-w-0 overflow-hidden", className)}>
       <AnimatePresence mode="wait">
         <motion.div
+          className="truncate whitespace-nowrap"
           key={uniqueKey}
           initial={{ y: 8, opacity: 0 }}
           animate={{ y: 2, opacity: 1 }}
