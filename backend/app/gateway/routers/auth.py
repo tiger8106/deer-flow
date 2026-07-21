@@ -51,6 +51,13 @@ class LoginResponse(BaseModel):
     needs_setup: bool = False
 
 
+class UserDirectoryEntry(BaseModel):
+    """Minimal authenticated-user directory record for external modules."""
+
+    id: str
+    email: str
+
+
 # Top common-password blocklist. Drawn from the public SecLists "10k worst
 # passwords" set, lowercased + length>=8 only (shorter ones already fail
 # the min_length check). Kept tight on purpose: this is the **lower bound**
@@ -414,6 +421,16 @@ async def get_me(request: Request):
         needs_setup=user.needs_setup,
         oauth_provider=user.oauth_provider,
     )
+
+
+@router.get("/users/resolve", response_model=UserDirectoryEntry)
+async def resolve_user(email: EmailStr, request: Request):
+    """Resolve an exact email without exposing password or provider metadata."""
+    await get_current_user_from_request(request)
+    user = await get_local_provider().get_user_by_email(str(email))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return UserDirectoryEntry(id=str(user.id), email=user.email)
 
 
 # Per-IP cache: ip → (timestamp, result_dict).

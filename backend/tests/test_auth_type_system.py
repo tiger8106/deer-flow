@@ -545,6 +545,27 @@ def test_api_auth_me_auth_disabled_returns_synthetic_user(monkeypatch):
     assert body["oauth_provider"] is None
 
 
+def test_api_authenticated_user_can_resolve_exact_directory_email():
+    _setup_config()
+    client = _get_auth_client()
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "directory-user@test.com", "password": "securepassword123"},
+    )
+
+    response = client.get("/api/v1/auth/users/resolve", params={"email": "directory-user@test.com"})
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "directory-user@test.com"
+    assert set(response.json()) == {"id", "email"}
+
+
+def test_api_user_directory_requires_authentication():
+    _setup_config()
+    response = _get_auth_client().get("/api/v1/auth/users/resolve", params={"email": "nobody@test.com"})
+    assert response.status_code == 401
+
+
 def test_api_auth_me_expired_token_returns_structured_401():
     """/api/v1/auth/me with expired token → 401 with {code: 'token_expired'}."""
     _setup_config()

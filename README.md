@@ -626,6 +626,14 @@ Use it as-is. Or tear it apart and make it yours.
 
 ## Core Features
 
+### Authenticated User Resolution
+
+External modules that need to grant access to an existing DeerFlow account can call
+`GET /api/v1/auth/users/resolve?email=<exact-email>`. The endpoint requires an
+authenticated DeerFlow session and returns only the matching user's `id` and `email`;
+unknown accounts return `404`. It intentionally does not provide a browsable user list
+or expose password/provider metadata.
+
 ### Skills & Tools
 
 Skills are what make DeerFlow do *almost anything*.
