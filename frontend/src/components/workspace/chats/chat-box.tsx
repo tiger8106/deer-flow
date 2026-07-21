@@ -37,6 +37,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const isMobile = useIsMobile();
   const pathname = usePathname();
   const threadIdRef = useRef(threadId);
+  const externalPreviewFrameRef = useRef<HTMLIFrameElement>(null);
 
   const {
     artifacts,
@@ -51,7 +52,6 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const sidecarOpen = sidecar?.open ?? false;
   const externalPreview = useExternalPreview();
   const externalPreviewOpen = externalPreview.preview !== null;
-  const externalPreviewRequestId = externalPreview.preview?.requestId;
   const [externalPreviewFullscreen, setExternalPreviewFullscreen] =
     useState(false);
   const [rightPanelPercent, setRightPanelPercent] = useState(40);
@@ -150,9 +150,10 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   }, [artifactsOpen, setArtifactsOpen, sidecarOpen]);
 
   useEffect(() => {
+    if (externalPreviewOpen) return;
     setRightPanelPercent(40);
     setExternalPreviewFullscreen(false);
-  }, [externalPreviewRequestId]);
+  }, [externalPreviewOpen]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -180,6 +181,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     if (renderedRightPanel === "external-preview" && externalPreview.preview) {
       return (
         <iframe
+          ref={externalPreviewFrameRef}
           key={externalPreview.preview.requestId}
           className="size-full border-0"
           src={externalPreview.preview.url}
@@ -254,9 +256,14 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     )
       return;
     event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
     const container = event.currentTarget.parentElement;
     if (!container) return;
     pendingPercentRef.current = rightPanelPercent;
+    externalPreviewFrameRef.current?.contentWindow?.postMessage(
+      { type: "tiger:preview-resize-start" },
+      window.location.origin,
+    );
     const handleMove = (moveEvent: PointerEvent) => {
       const bounds = container.getBoundingClientRect();
       const percent = ((bounds.right - moveEvent.clientX) / bounds.width) * 100;
@@ -275,6 +282,10 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       }
       setRightPanelPercent(pendingPercentRef.current);
       setIsResizingPreview(false);
+      externalPreviewFrameRef.current?.contentWindow?.postMessage(
+        { type: "tiger:preview-resize-end" },
+        window.location.origin,
+      );
       document.body.style.removeProperty("cursor");
       document.body.style.removeProperty("user-select");
     };
@@ -333,7 +344,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     <div
       id={`${resizableIdBase}-panels`}
       className={cn(
-        "[container-type:inline-size] grid size-full min-h-0 transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        "relative [container-type:inline-size] grid size-full min-h-0 transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
         isResizingPreview && "transition-none",
         rightPanelOpen
           ? "grid-cols-[minmax(0,1fr)_1px_minmax(0,40%)]"
@@ -390,6 +401,12 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
           {rightPanelContent}
         </div>
       </aside>
+      {isResizingPreview ? (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-50 cursor-col-resize"
+        />
+      ) : null}
     </div>
   );
 };
