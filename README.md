@@ -138,6 +138,9 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    packages remain outside the DeerFlow source tree. Citation links that set
    `preview=side-panel` opt into the generic external-preview panel; ordinary
    citation URLs keep the standard external-link behavior.
+   Runtime deployments can also register same-origin iframe applications with
+   `DEER_FLOW_WORKSPACE_APPS`; the generic `/workspace/[app_id]` route and
+   sidebar consume that JSON without adding application-specific source files.
 
    <details>
    <summary>Manual model configuration examples</summary>

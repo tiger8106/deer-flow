@@ -15,7 +15,6 @@ import {
   hasContent,
   hasReasoning,
   isAssistantMessageGroupStreaming,
-  stripCitationMarkupWhileStreaming,
   stripUploadedFilesTag,
 } from "@/core/messages/utils";
 
@@ -27,7 +26,7 @@ function aiMessage(content: string): Message {
   } as Message;
 }
 
-test("hides injected memory and knowledge guard messages without relying on content", () => {
+test("hides injected memory and explicitly hidden middleware messages", () => {
   const injectedMemory = {
     id: "thread-1__memory",
     type: "human",
@@ -39,18 +38,19 @@ test("hides injected memory and knowledge guard messages without relying on cont
     content: "internal dynamic context",
     additional_kwargs: { dynamic_context_reminder: true },
   } as Message;
-  const knowledgeGuard = {
+  const middlewareGuard = {
     id: "guard-1",
     type: "human",
-    name: "knowledge_retrieval_guard",
+    name: "external_middleware_guard",
     content: "internal retrieval instructions",
+    additional_kwargs: { hide_from_ui: true },
   } as Message;
 
   expect(isHiddenFromUIMessage(injectedMemory)).toBe(true);
   expect(isHiddenFromUIMessage(dynamicContext)).toBe(true);
-  expect(isHiddenFromUIMessage(knowledgeGuard)).toBe(true);
+  expect(isHiddenFromUIMessage(middlewareGuard)).toBe(true);
   expect(
-    getMessageGroups([injectedMemory, dynamicContext, knowledgeGuard]),
+    getMessageGroups([injectedMemory, dynamicContext, middlewareGuard]),
   ).toEqual([]);
 });
 
@@ -183,29 +183,6 @@ test("keeps tool-call reasoning in the processing group while the final answer's
 });
 
 describe("inline <think> tag splitting", () => {
-  test("hides internal citation anchors and markers while streaming", () => {
-    const content =
-      "第一条内容<a>[1]</a>\n第二条内容<a>[2]</a>\n<!--CITATIONS:tool_123-->";
-
-    expect(stripCitationMarkupWhileStreaming(content)).toBe(
-      "第一条内容\n第二条内容",
-    );
-  });
-
-  test("hides rendered and partial citations until streaming completes", () => {
-    expect(
-      stripCitationMarkupWhileStreaming(
-        "正文 [citation: 1](http://localhost:2026/knowledge/citation-preview?document_id=doc-1)",
-      ),
-    ).toBe("正文");
-    expect(stripCitationMarkupWhileStreaming("正文<a>[1")).toBe("正文");
-    expect(
-      stripCitationMarkupWhileStreaming(
-        "正文 [citation: 1](http://localhost:2026/knowledge/citation-preview",
-      ),
-    ).toBe("正文");
-  });
-
   test("hides persisted internal citation markers from assistant content", () => {
     const message = aiMessage(
       "最终回答。[citation: 1](/knowledge/citation-preview)\n\n<!--CITATIONS:turn_6364af73ef20-->",
@@ -336,9 +313,7 @@ describe("internal model stream filtering", () => {
       true,
     );
     expect(isInternalStreamMetadata({ tags: ["nostream"] })).toBe(true);
-    expect(isInternalStreamMetadata({ run_name: "citations_highlight" })).toBe(
-      true,
-    );
+    expect(isInternalStreamMetadata({ run_name: "title_agent" })).toBe(true);
   });
 
   test("keeps the lead agent answer stream visible", () => {

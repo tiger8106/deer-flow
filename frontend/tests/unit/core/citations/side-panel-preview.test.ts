@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
 
 import {
+  getSidePanelPreviewKey,
   getSidePanelPreviewTitle,
   isSidePanelPreviewURL,
 } from "@/core/citations/side-panel-preview";
@@ -28,5 +29,14 @@ describe("isSidePanelPreviewURL", () => {
     expect(
       getSidePanelPreviewTitle("https://example.com/report.pdf"),
     ).toBeNull();
+  });
+
+  it("reads an opaque key without knowing the external module resource type", () => {
+    expect(
+      getSidePanelPreviewKey(
+        "/knowledge/citation-preview?preview=side-panel&preview_key=knowledge-document%3Adoc-1",
+      ),
+    ).toBe("knowledge-document:doc-1");
+    expect(getSidePanelPreviewKey("https://example.com/report.pdf")).toBeNull();
   });
 });

@@ -1,5 +1,7 @@
 import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 
+import { stripLegacyCitationArtifacts } from "@/core/citations/legacy";
+
 interface GenericMessageGroup<T = string> {
   type: T;
   id: string | undefined;
@@ -31,7 +33,6 @@ const HIDDEN_CONTROL_MESSAGE_NAMES = new Set([
   "loop_warning",
   "todo_reminder",
   "todo_completion_reminder",
-  "knowledge_retrieval_guard",
 ]);
 
 export function getMessageGroups(messages: Message[]): MessageGroup[] {
@@ -209,7 +210,6 @@ export type StreamingMessageLookup = {
 };
 
 const INTERNAL_STREAM_RUN_NAMES = new Set([
-  "citations_highlight",
   "memory_agent",
   "summary_agent",
   "title_agent",
@@ -340,32 +340,6 @@ export function extractTextFromMessage(message: Message) {
 
 const THINK_OPEN_TAG = "<think>";
 const THINK_TAG_RE = /<think>\s*([\s\S]*?)\s*<\/think>/g;
-const INTERNAL_CITATION_MARKER_RE = /<!--\s*CITATIONS:[A-Za-z0-9_-]+\s*-->/g;
-const INTERNAL_CITATION_ANCHOR_RE = /<a>\s*\[\d+\]\s*<\/a>/gi;
-const INTERNAL_CITATION_SOURCE_BLOCK_RE =
-  /\n{2,}(?:---\s*\n+)?引用来源[:：]\s*\n(?:\s*\[\d+\][^\n]*(?:\n|$))+(?=\s*(?:<!--(?:\s*CITATIONS(?::[A-Za-z0-9_-]*)?)?|$))/gi;
-const RENDERED_CITATION_LINK_RE =
-  /(?<!!)\[citation:\s*[^\]]+?\]\((?:[^\s()]|\([^\s()]*\))+\)/gi;
-const TRAILING_INTERNAL_PLACEHOLDER_RE =
-  /(?:<a(?:>\s*(?:\[\s*\d*\s*(?:\]\s*(?:<\/?a?)?)?)?)?|<!--(?:\s*CITATIONS(?::[A-Za-z0-9_-]*)?)?)$/i;
-const TRAILING_INTERNAL_CITATION_RE =
-  /(?:<a(?:>\s*(?:\[\s*\d*\s*(?:\]\s*(?:<\/?a?)?)?)?)?|\[citation:[^\n]*)$/i;
-
-function stripInternalCitationMarkers(content: string) {
-  return content
-    .replace(INTERNAL_CITATION_SOURCE_BLOCK_RE, "")
-    .replace(INTERNAL_CITATION_MARKER_RE, "")
-    .replace(INTERNAL_CITATION_ANCHOR_RE, "")
-    .replace(TRAILING_INTERNAL_PLACEHOLDER_RE, "")
-    .trim();
-}
-
-export function stripCitationMarkupWhileStreaming(content: string) {
-  return stripInternalCitationMarkers(content)
-    .replace(RENDERED_CITATION_LINK_RE, "")
-    .replace(TRAILING_INTERNAL_CITATION_RE, "")
-    .trimEnd();
-}
 
 function splitInlineReasoning(content: string) {
   const reasoningParts: string[] = [];
@@ -401,7 +375,7 @@ function splitInlineReasoning(content: string) {
   return {
     // Compatibility for messages persisted before citation metadata stopped
     // being appended to assistant content.
-    content: stripInternalCitationMarkers(cleaned),
+    content: stripLegacyCitationArtifacts(cleaned),
     reasoning: reasoningParts.length > 0 ? reasoningParts.join("\n\n") : null,
   };
 }
@@ -439,7 +413,7 @@ export function extractContentFromMessage(message: Message) {
       .join("\n")
       .trim();
     return message.type === "ai"
-      ? stripInternalCitationMarkers(content)
+      ? stripLegacyCitationArtifacts(content)
       : content;
   }
   return "";
@@ -654,7 +628,7 @@ const INTERNAL_MARKER_RE = new RegExp(
  * model about its own ``<memory>`` system).
  */
 export function stripInternalMarkers(content: string): string {
-  return stripInternalCitationMarkers(content.replace(INTERNAL_MARKER_RE, ""));
+  return stripLegacyCitationArtifacts(content.replace(INTERNAL_MARKER_RE, ""));
 }
 
 export function parseUploadedFiles(content: string): FileInMessage[] {

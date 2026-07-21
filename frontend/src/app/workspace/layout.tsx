@@ -4,6 +4,7 @@ import { GatewayOfflineFallback } from "@/components/workspace/gateway-offline-f
 import { AuthProvider } from "@/core/auth/AuthProvider";
 import { getServerSideUser } from "@/core/auth/server";
 import { assertNever } from "@/core/auth/types";
+import { getWorkspaceApps } from "@/core/workspace-apps/server";
 
 import { WorkspaceContent } from "./workspace-content";
 
@@ -13,12 +14,15 @@ export default async function WorkspaceLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const result = await getServerSideUser();
+  const workspaceApps = getWorkspaceApps();
 
   switch (result.tag) {
     case "authenticated":
       return (
         <AuthProvider initialUser={result.user}>
-          <WorkspaceContent>{children}</WorkspaceContent>
+          <WorkspaceContent workspaceApps={workspaceApps}>
+            {children}
+          </WorkspaceContent>
         </AuthProvider>
       );
     case "needs_setup":
@@ -33,7 +37,9 @@ export default async function WorkspaceLayout({
       // stays false here to avoid double-mounting.
       return (
         <GatewayOfflineFallback>
-          <WorkspaceContent gatewayUnavailable>{children}</WorkspaceContent>
+          <WorkspaceContent gatewayUnavailable workspaceApps={workspaceApps}>
+            {children}
+          </WorkspaceContent>
         </GatewayOfflineFallback>
       );
     case "config_error":

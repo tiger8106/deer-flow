@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { getPreviewDocumentId } from "./navigation";
+import { getSidePanelPreviewKey } from "@/core/citations/side-panel-preview";
 
 export type ExternalPreview = {
   url: string;
@@ -34,12 +34,9 @@ export function ExternalPreviewProvider({ children }: { children: ReactNode }) {
   const requestIdRef = useRef(0);
   const open = useCallback((next: Pick<ExternalPreview, "url" | "title">) => {
     setPreview((current) => {
-      const nextDocumentId = getPreviewDocumentId(next.url, window.location.origin);
-      const currentDocumentId = getPreviewDocumentId(
-        current?.url,
-        window.location.origin,
-      );
-      if (current && nextDocumentId && nextDocumentId === currentDocumentId) {
+      const nextPreviewKey = getSidePanelPreviewKey(next.url);
+      const currentPreviewKey = getSidePanelPreviewKey(current?.url);
+      if (current && nextPreviewKey && nextPreviewKey === currentPreviewKey) {
         return {
           ...current,
           title: next.title,

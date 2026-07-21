@@ -6,6 +6,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { CommandPalette } from "@/components/workspace/command-palette";
 import { GatewayOfflineBanner } from "@/components/workspace/gateway-offline-banner";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
+import type { WorkspaceApp } from "@/core/workspace-apps/types";
 
 function parseSidebarOpenCookie(
   value: string | undefined,
@@ -18,9 +19,11 @@ function parseSidebarOpenCookie(
 export async function WorkspaceContent({
   children,
   gatewayUnavailable = false,
+  workspaceApps,
 }: Readonly<{
   children: React.ReactNode;
   gatewayUnavailable?: boolean;
+  workspaceApps: WorkspaceApp[];
 }>) {
   const cookieStore = await cookies();
   const initialSidebarOpen = parseSidebarOpenCookie(
@@ -30,7 +33,7 @@ export async function WorkspaceContent({
   return (
     <QueryClientProvider>
       <SidebarProvider className="h-screen" defaultOpen={initialSidebarOpen}>
-        <WorkspaceSidebar />
+        <WorkspaceSidebar workspaceApps={workspaceApps} />
         <SidebarInset className="min-w-0">
           <GatewayOfflineBanner gatewayUnavailable={gatewayUnavailable} />
           {children}

@@ -159,18 +159,21 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     if (!externalPreview.preview?.navigationId) return;
     externalPreviewFrameRef.current?.contentWindow?.postMessage(
       {
-        type: "tiger:navigate-preview",
+        type: "deerflow:external-preview:navigate",
         url: externalPreview.preview.navigationUrl,
       },
       window.location.origin,
     );
-  }, [externalPreview.preview?.navigationId, externalPreview.preview?.navigationUrl]);
+  }, [
+    externalPreview.preview?.navigationId,
+    externalPreview.preview?.navigationUrl,
+  ]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (
         event.origin === window.location.origin &&
-        event.data?.type === "tiger:close-preview"
+        event.data?.type === "deerflow:external-preview:close"
       ) {
         externalPreview.close();
         setExternalPreviewFullscreen(false);
@@ -178,19 +181,19 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       }
       if (
         event.origin === window.location.origin &&
-        event.data?.type === "tiger:set-preview-fullscreen" &&
+        event.data?.type === "deerflow:external-preview:set-fullscreen" &&
         typeof event.data.fullscreen === "boolean"
       ) {
         setExternalPreviewFullscreen(event.data.fullscreen);
       }
       if (
         event.origin === window.location.origin &&
-        event.data?.type === "tiger:preview-ready" &&
+        event.data?.type === "deerflow:external-preview:ready" &&
         externalPreview.preview?.navigationId
       ) {
         externalPreviewFrameRef.current?.contentWindow?.postMessage(
           {
-            type: "tiger:navigate-preview",
+            type: "deerflow:external-preview:navigate",
             url: externalPreview.preview.navigationUrl,
           },
           window.location.origin,
@@ -285,7 +288,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     if (!container) return;
     pendingPercentRef.current = rightPanelPercent;
     externalPreviewFrameRef.current?.contentWindow?.postMessage(
-      { type: "tiger:preview-resize-start" },
+      { type: "deerflow:external-preview:resize-start" },
       window.location.origin,
     );
     const handleMove = (moveEvent: PointerEvent) => {
@@ -307,7 +310,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       setRightPanelPercent(pendingPercentRef.current);
       setIsResizingPreview(false);
       externalPreviewFrameRef.current?.contentWindow?.postMessage(
-        { type: "tiger:preview-resize-end" },
+        { type: "deerflow:external-preview:resize-end" },
         window.location.origin,
       );
       document.body.style.removeProperty("cursor");
@@ -368,7 +371,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     <div
       id={`${resizableIdBase}-panels`}
       className={cn(
-        "relative [container-type:inline-size] grid size-full min-h-0 transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        "[container-type:inline-size] relative grid size-full min-h-0 transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
         isResizingPreview && "transition-none",
         rightPanelOpen
           ? "grid-cols-[minmax(0,1fr)_1px_minmax(0,40%)]"
@@ -398,7 +401,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
         aria-hidden={!rightPanelOpen || externalPreviewFullscreen}
         onPointerDown={startResize}
         className={cn(
-          "bg-border relative z-10 cursor-col-resize opacity-33 transition-opacity duration-200 ease-out motion-reduce:transition-none after:absolute after:inset-y-0 after:-left-2 after:w-4",
+          "bg-border relative z-10 cursor-col-resize opacity-33 transition-opacity duration-200 ease-out after:absolute after:inset-y-0 after:-left-2 after:w-4 motion-reduce:transition-none",
           !rightPanelOpen && "pointer-events-none opacity-0",
           renderedRightPanel !== "external-preview" && "cursor-default",
           externalPreviewFullscreen && "pointer-events-none opacity-0",

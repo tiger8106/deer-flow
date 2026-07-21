@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AppWindow,
   BotIcon,
   CalendarClock,
   LibraryBig,
@@ -22,25 +23,42 @@ import {
 } from "@/components/ui/tooltip";
 import { useAgentsApiEnabled } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
+import {
+  getWorkspaceAppLabel,
+  type WorkspaceApp,
+} from "@/core/workspace-apps/types";
 
-export function WorkspaceNavChatList() {
-  const { t } = useI18n();
+const WORKSPACE_APP_ICONS = {
+  library: LibraryBig,
+} as const;
+
+function WorkspaceAppIcon({ name }: { name: string }) {
+  const Icon =
+    WORKSPACE_APP_ICONS[name as keyof typeof WORKSPACE_APP_ICONS] ?? AppWindow;
+  return <Icon />;
+}
+
+export function WorkspaceNavChatList({
+  workspaceApps,
+}: {
+  workspaceApps: WorkspaceApp[];
+}) {
+  const { locale, t } = useI18n();
   const pathname = usePathname();
   const { enabled: agentsEnabled } = useAgentsApiEnabled();
   return (
     <SidebarGroup className="pt-1">
       <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            isActive={pathname.startsWith("/workspace/knowledge")}
-            asChild
-          >
-            <Link className="text-muted-foreground" href="/workspace/knowledge">
-              <LibraryBig />
-              <span>{t.sidebar.knowledge}</span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        {workspaceApps.map((app) => (
+          <SidebarMenuItem key={app.id}>
+            <SidebarMenuButton isActive={pathname.startsWith(app.href)} asChild>
+              <Link className="text-muted-foreground" href={app.href}>
+                <WorkspaceAppIcon name={app.icon} />
+                <span>{getWorkspaceAppLabel(app, locale)}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
         <SidebarMenuItem>
           <SidebarMenuButton isActive={pathname === "/workspace/chats"} asChild>
             <Link className="text-muted-foreground" href="/workspace/chats">

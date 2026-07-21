@@ -10,6 +10,14 @@ export function getSidePanelPreviewTitle(
   return title?.length ? title : null;
 }
 
+export function getSidePanelPreviewKey(
+  href: string | undefined,
+): string | null {
+  const url = parseSidePanelPreviewURL(href);
+  const key = url?.searchParams.get("preview_key")?.trim();
+  return key?.length ? key : null;
+}
+
 function parseSidePanelPreviewURL(href: string | undefined): URL | null {
   if (!href) return null;
   try {

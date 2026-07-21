@@ -86,11 +86,16 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
 ### Interaction Ownership
 
 - `components/workspace/external-preview` owns generic right-panel iframe
-  state. Citation URLs opt in only with `preview=side-panel`; domain-specific
-  preview, navigation, and highlighting remain in the external module.
+  state. Citation URLs opt in only with `preview=side-panel`, may carry an
+  opaque `preview_key` for iframe reuse, and keep domain-specific preview,
+  navigation, and highlighting in the external module.
 - `components/workspace/chats/chat-box.tsx` arbitrates external preview,
   sidecar, and artifact panels in that priority order and handles same-origin
-  `tiger:close-preview` messages from the embedded page.
+  `deerflow:external-preview:*` messages from the embedded page.
+- `DEER_FLOW_WORKSPACE_APPS` is a deployment-owned JSON array consumed by the
+  server layout. `core/workspace-apps` validates it, `/workspace/[app_id]`
+  renders the iframe, and the sidebar renders its configured entries. DeerFlow
+  source must not add an application-specific route, label, or icon branch.
 
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns composer busy-state wiring.
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns branch-from-turn submission and navigation; sidecar `MessageList` instances do not receive the branch action.
