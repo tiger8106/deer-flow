@@ -5,15 +5,16 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-export type ExternalPreview = { url: string; title: string };
+export type ExternalPreview = { url: string; title: string; requestId: number };
 
 type ExternalPreviewContextValue = {
   preview: ExternalPreview | null;
-  open: (preview: ExternalPreview) => void;
+  open: (preview: Omit<ExternalPreview, "requestId">) => void;
   close: () => void;
 };
 
@@ -22,7 +23,12 @@ const ExternalPreviewContext =
 
 export function ExternalPreviewProvider({ children }: { children: ReactNode }) {
   const [preview, setPreview] = useState<ExternalPreview | null>(null);
-  const open = useCallback((next: ExternalPreview) => setPreview(next), []);
+  const requestIdRef = useRef(0);
+  const open = useCallback(
+    (next: Omit<ExternalPreview, "requestId">) =>
+      setPreview({ ...next, requestId: ++requestIdRef.current }),
+    [],
+  );
   const close = useCallback(() => setPreview(null), []);
   const value = useMemo(
     () => ({ preview, open, close }),

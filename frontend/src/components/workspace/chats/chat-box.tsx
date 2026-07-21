@@ -21,6 +21,7 @@ import {
   useArtifacts,
 } from "../artifacts";
 import { useExternalPreview } from "../external-preview";
+import { clampPreviewPanelPercent } from "../external-preview/layout";
 import { useThread } from "../messages/context";
 import { SidecarPanel, useMaybeSidecar } from "../sidecar";
 
@@ -50,6 +51,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const sidecarOpen = sidecar?.open ?? false;
   const externalPreview = useExternalPreview();
   const externalPreviewOpen = externalPreview.preview !== null;
+  const [externalPreviewFullscreen, setExternalPreviewFullscreen] =
+    useState(false);
+  const [rightPanelPercent, setRightPanelPercent] = useState(40);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
@@ -148,6 +152,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
         event.data?.type === "tiger:close-preview"
       ) {
         externalPreview.close();
+        setExternalPreviewFullscreen(false);
+      }
+      if (
+        event.origin === window.location.origin &&
+        event.data?.type === "tiger:toggle-preview-fullscreen"
+      ) {
+        setExternalPreviewFullscreen((current) => !current);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -158,6 +169,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     if (renderedRightPanel === "external-preview" && externalPreview.preview) {
       return (
         <iframe
+          key={externalPreview.preview.requestId}
           className="size-full border-0"
           src={externalPreview.preview.url}
           title={externalPreview.preview.title}
@@ -223,6 +235,32 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     setArtifactsOpen,
   ]);
 
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (
+      !rightPanelOpen ||
+      renderedRightPanel !== "external-preview" ||
+      externalPreviewFullscreen
+    )
+      return;
+    event.preventDefault();
+    const container = event.currentTarget.parentElement;
+    if (!container) return;
+    const handleMove = (moveEvent: PointerEvent) => {
+      const bounds = container.getBoundingClientRect();
+      const percent = ((bounds.right - moveEvent.clientX) / bounds.width) * 100;
+      setRightPanelPercent(clampPreviewPanelPercent(percent));
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp, { once: true });
+  };
+
   if (isMobile) {
     return (
       <>
@@ -276,16 +314,28 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
           ? "grid-cols-[minmax(0,1fr)_1px_minmax(0,40%)]"
           : "grid-cols-[minmax(0,1fr)_0px_0px]",
       )}
+      style={
+        rightPanelOpen
+          ? {
+              gridTemplateColumns: externalPreviewFullscreen
+                ? "0px 0px minmax(0, 1fr)"
+                : `minmax(0, 1fr) 1px minmax(0, ${rightPanelPercent}%)`,
+            }
+          : undefined
+      }
     >
       <div className="relative min-h-0 min-w-0" id="chat">
         {children}
       </div>
       <div
         id={`${resizableIdBase}-separator`}
-        aria-hidden="true"
+        aria-hidden={!rightPanelOpen || externalPreviewFullscreen}
+        onPointerDown={startResize}
         className={cn(
-          "bg-border opacity-33 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+          "bg-border relative z-10 cursor-col-resize opacity-33 transition-opacity duration-200 ease-out motion-reduce:transition-none after:absolute after:inset-y-0 after:-left-2 after:w-4",
           !rightPanelOpen && "pointer-events-none opacity-0",
+          renderedRightPanel !== "external-preview" && "cursor-default",
+          externalPreviewFullscreen && "pointer-events-none opacity-0",
         )}
       />
       <aside
@@ -298,7 +348,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       >
         <div
           className={cn(
-            "ml-auto h-full w-[40cqw] transition-opacity duration-[280ms] ease-out motion-reduce:transition-none",
+            "ml-auto h-full w-full transition-opacity duration-[280ms] ease-out motion-reduce:transition-none",
             renderedRightPanel === "sidecar" ||
               renderedRightPanel === "external-preview"
               ? "p-0"
