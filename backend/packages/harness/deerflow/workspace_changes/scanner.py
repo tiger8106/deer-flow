@@ -20,12 +20,17 @@ EXCLUDED_DIR_NAMES = {
     ".svn",
     ".cache",
     ".next",
+    ".tool-results",
     ".venv",
     "__pycache__",
     "build",
     "dist",
     "node_modules",
 }
+
+
+def is_internal_workspace_path(path: str) -> bool:
+    return ".tool-results" in Path(path).parts
 
 BINARY_EXTENSIONS = {
     ".7z",

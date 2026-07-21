@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .scanner import is_internal_workspace_path
 from .types import WORKSPACE_CHANGES_EVENT_TYPE, WORKSPACE_CHANGES_METADATA_KEY
 
 EMPTY_SUMMARY = {
@@ -36,8 +37,27 @@ async def get_workspace_changes_response(
         return _empty_response()
 
     response = dict(payload)
-    response["available"] = True
+    files = response.get("files")
+    if isinstance(files, list):
+        visible_files = [
+            file
+            for file in files
+            if not (
+                isinstance(file, dict)
+                and is_internal_workspace_path(str(file.get("path") or ""))
+            )
+        ]
+        response["files"] = visible_files
+        if len(visible_files) != len(files):
+            response["summary"] = _summarize_files(
+                visible_files,
+                truncated=bool((response.get("summary") or {}).get("truncated")),
+            )
     response.setdefault("summary", dict(EMPTY_SUMMARY))
+    response["available"] = any(
+        int(response["summary"].get(key) or 0)
+        for key in ("created", "modified", "deleted")
+    )
     if include_files:
         response.setdefault("files", [])
         if not include_diff:
@@ -45,6 +65,20 @@ async def get_workspace_changes_response(
     else:
         response["files"] = []
     return response
+
+
+def _summarize_files(files: list[Any], *, truncated: bool) -> dict[str, Any]:
+    summary = dict(EMPTY_SUMMARY)
+    summary["truncated"] = truncated
+    for file in files:
+        if not isinstance(file, dict):
+            continue
+        status = file.get("status")
+        if status in ("created", "modified", "deleted"):
+            summary[status] += 1
+        summary["additions"] += int(file.get("additions") or 0)
+        summary["deletions"] += int(file.get("deletions") or 0)
+    return summary
 
 
 def _empty_response() -> dict[str, Any]:

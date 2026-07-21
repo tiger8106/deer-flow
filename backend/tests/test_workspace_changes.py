@@ -191,11 +191,68 @@ def test_scan_workspace_roots_skips_excluded_directories(tmp_path):
         "ignored",
         encoding="utf-8",
     )
+    outputs = roots[1].host_path
+    (outputs / ".tool-results").mkdir()
+    (outputs / ".tool-results" / "knowledge_query-result.txt").write_text(
+        "internal tool payload",
+        encoding="utf-8",
+    )
 
     snapshot = scan_workspace_roots(roots)
 
     assert "/mnt/user-data/workspace/visible.txt" in snapshot.files
     assert "/mnt/user-data/workspace/node_modules/ignored.js" not in snapshot.files
+    assert (
+        "/mnt/user-data/outputs/.tool-results/knowledge_query-result.txt"
+        not in snapshot.files
+    )
+
+
+@pytest.mark.asyncio
+async def test_workspace_changes_response_hides_historical_internal_tool_results():
+    store = MemoryRunEventStore()
+    internal_file = {
+        "path": "/mnt/user-data/outputs/.tool-results/knowledge_query-result.txt",
+        "root": "outputs",
+        "status": "created",
+        "additions": 12,
+        "deletions": 0,
+    }
+    await store.put(
+        thread_id="thread-1",
+        run_id="run-1",
+        event_type="workspace_changes",
+        category="workspace",
+        content="1 file changed +12 -0",
+        metadata={
+            "workspace_changes": {
+                "version": 1,
+                "summary": {
+                    "created": 1,
+                    "modified": 0,
+                    "deleted": 0,
+                    "additions": 12,
+                    "deletions": 0,
+                    "truncated": False,
+                },
+                "files": [internal_file],
+                "limits": {},
+            }
+        },
+    )
+
+    response = await get_workspace_changes_response(store, "thread-1", "run-1")
+
+    assert response["available"] is False
+    assert response["files"] == []
+    assert response["summary"] == {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0,
+        "additions": 0,
+        "deletions": 0,
+        "truncated": False,
+    }
 
 
 def test_scan_workspace_roots_can_skip_text_loading(tmp_path):
