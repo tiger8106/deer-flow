@@ -156,6 +156,17 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   }, [externalPreviewOpen]);
 
   useEffect(() => {
+    if (!externalPreview.preview?.navigationId) return;
+    externalPreviewFrameRef.current?.contentWindow?.postMessage(
+      {
+        type: "tiger:navigate-preview",
+        url: externalPreview.preview.navigationUrl,
+      },
+      window.location.origin,
+    );
+  }, [externalPreview.preview?.navigationId, externalPreview.preview?.navigationUrl]);
+
+  useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (
         event.origin === window.location.origin &&
@@ -171,6 +182,19 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
         typeof event.data.fullscreen === "boolean"
       ) {
         setExternalPreviewFullscreen(event.data.fullscreen);
+      }
+      if (
+        event.origin === window.location.origin &&
+        event.data?.type === "tiger:preview-ready" &&
+        externalPreview.preview?.navigationId
+      ) {
+        externalPreviewFrameRef.current?.contentWindow?.postMessage(
+          {
+            type: "tiger:navigate-preview",
+            url: externalPreview.preview.navigationUrl,
+          },
+          window.location.origin,
+        );
       }
     };
     window.addEventListener("message", handleMessage);

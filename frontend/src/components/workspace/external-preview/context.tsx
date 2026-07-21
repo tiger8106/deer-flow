@@ -10,11 +10,19 @@ import {
   type ReactNode,
 } from "react";
 
-export type ExternalPreview = { url: string; title: string; requestId: number };
+import { getPreviewDocumentId } from "./navigation";
+
+export type ExternalPreview = {
+  url: string;
+  navigationUrl: string;
+  title: string;
+  requestId: number;
+  navigationId: number;
+};
 
 type ExternalPreviewContextValue = {
   preview: ExternalPreview | null;
-  open: (preview: Omit<ExternalPreview, "requestId">) => void;
+  open: (preview: Pick<ExternalPreview, "url" | "title">) => void;
   close: () => void;
 };
 
@@ -24,11 +32,29 @@ const ExternalPreviewContext =
 export function ExternalPreviewProvider({ children }: { children: ReactNode }) {
   const [preview, setPreview] = useState<ExternalPreview | null>(null);
   const requestIdRef = useRef(0);
-  const open = useCallback(
-    (next: Omit<ExternalPreview, "requestId">) =>
-      setPreview({ ...next, requestId: ++requestIdRef.current }),
-    [],
-  );
+  const open = useCallback((next: Pick<ExternalPreview, "url" | "title">) => {
+    setPreview((current) => {
+      const nextDocumentId = getPreviewDocumentId(next.url, window.location.origin);
+      const currentDocumentId = getPreviewDocumentId(
+        current?.url,
+        window.location.origin,
+      );
+      if (current && nextDocumentId && nextDocumentId === currentDocumentId) {
+        return {
+          ...current,
+          title: next.title,
+          navigationUrl: next.url,
+          navigationId: current.navigationId + 1,
+        };
+      }
+      return {
+        ...next,
+        navigationUrl: next.url,
+        requestId: ++requestIdRef.current,
+        navigationId: 0,
+      };
+    });
+  }, []);
   const close = useCallback(() => setPreview(null), []);
   const value = useMemo(
     () => ({ preview, open, close }),
