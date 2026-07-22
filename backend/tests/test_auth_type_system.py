@@ -560,6 +560,53 @@ def test_api_authenticated_user_can_resolve_exact_directory_email():
     assert set(response.json()) == {"id", "email"}
 
 
+def test_first_registered_user_is_admin_and_later_user_is_regular():
+    _setup_config()
+    first_client = _get_auth_client()
+    first = first_client.post(
+        "/api/v1/auth/register",
+        json={"email": "first-admin@test.com", "password": "securepassword123"},
+    )
+    second = _get_auth_client().post(
+        "/api/v1/auth/register",
+        json={"email": "later-user@test.com", "password": "securepassword456"},
+    )
+
+    assert first.status_code == 201
+    assert first.json()["system_role"] == "admin"
+    assert second.status_code == 201
+    assert second.json()["system_role"] == "user"
+
+
+def test_admin_can_list_minimal_user_directory_and_regular_user_cannot():
+    _setup_config()
+    admin_client = _get_auth_client()
+    admin = admin_client.post(
+        "/api/v1/auth/register",
+        json={"email": "directory-admin@test.com", "password": "securepassword123"},
+    ).json()
+    user_client = _get_auth_client()
+    user = user_client.post(
+        "/api/v1/auth/register",
+        json={"email": "directory-regular@test.com", "password": "securepassword456"},
+    ).json()
+
+    response = admin_client.get("/api/v1/auth/users")
+    assert response.status_code == 200
+    assert response.json() == [
+        {"id": admin["id"], "email": "directory-admin@test.com"},
+        {"id": user["id"], "email": "directory-regular@test.com"},
+    ]
+    assert user_client.get("/api/v1/auth/users").status_code == 403
+
+    resolved = user_client.get(f"/api/v1/auth/users/{admin['id']}")
+    assert resolved.status_code == 200
+    assert resolved.json() == {
+        "id": admin["id"],
+        "email": "directory-admin@test.com",
+    }
+
+
 def test_api_user_directory_requires_authentication():
     _setup_config()
     response = _get_auth_client().get("/api/v1/auth/users/resolve", params={"email": "nobody@test.com"})

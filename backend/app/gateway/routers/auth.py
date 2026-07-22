@@ -58,6 +58,9 @@ class UserDirectoryEntry(BaseModel):
     email: str
 
 
+_REGISTER_LOCK = asyncio.Lock()
+
+
 # Top common-password blocklist. Drawn from the public SecLists "10k worst
 # passwords" set, lowercased + length>=8 only (shorter ones already fail
 # the min_length check). Kept tight on purpose: this is the **lower bound**
@@ -328,18 +331,27 @@ async def login_local(
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: Request, response: Response, body: RegisterRequest):
-    """Register a new user account (always 'user' role).
+    """Register a new user account.
 
-    The first admin is created explicitly through /initialize. This endpoint creates regular users.
+    The first locally registered account becomes the system administrator;
+    subsequent registrations create regular users. ``/initialize`` remains
+    available for deployments that use the explicit first-boot setup flow.
     Auto-login by setting the session cookie.
     """
-    try:
-        user = await get_local_provider().create_user(email=body.email, password=body.password, system_role="user")
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already registered").model_dump(),
-        )
+    async with _REGISTER_LOCK:
+        provider = get_local_provider()
+        role = "admin" if await provider.count_users() == 0 else "user"
+        try:
+            user = await provider.create_user(
+                email=body.email,
+                password=body.password,
+                system_role=role,
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already registered").model_dump(),
+            )
 
     token = create_access_token(str(user.id), token_version=user.token_version)
     _set_session_cookie(response, token, request)
@@ -428,6 +440,25 @@ async def resolve_user(email: EmailStr, request: Request):
     """Resolve an exact email without exposing password or provider metadata."""
     await get_current_user_from_request(request)
     user = await get_local_provider().get_user_by_email(str(email))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return UserDirectoryEntry(id=str(user.id), email=user.email)
+
+
+@router.get("/users", response_model=list[UserDirectoryEntry])
+async def list_directory_users(request: Request):
+    """List minimal account records for administrator-owned module UIs."""
+    current = await get_current_user_from_request(request)
+    if current.system_role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+    return [UserDirectoryEntry(id=str(user.id), email=user.email) for user in await get_local_provider().list_users()]
+
+
+@router.get("/users/{user_id}", response_model=UserDirectoryEntry)
+async def get_directory_user(user_id: str, request: Request):
+    """Resolve one user ID for authenticated resource-attribution views."""
+    await get_current_user_from_request(request)
+    user = await get_local_provider().get_user(user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return UserDirectoryEntry(id=str(user.id), email=user.email)

@@ -119,6 +119,12 @@ class SQLiteUserRepository(UserRepository):
         async with self._sf() as session:
             return await session.scalar(stmt) or 0
 
+    async def list_users(self) -> list[User]:
+        stmt = select(UserRow).order_by(UserRow.created_at, UserRow.email)
+        async with self._sf() as session:
+            rows = list(await session.scalars(stmt))
+            return [self._row_to_user(row) for row in rows]
+
     async def get_user_by_oauth(self, provider: str, oauth_id: str) -> User | None:
         stmt = select(UserRow).where(UserRow.oauth_provider == provider, UserRow.oauth_id == oauth_id)
         async with self._sf() as session:

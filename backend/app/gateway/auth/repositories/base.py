@@ -89,6 +89,11 @@ class UserRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_users(self) -> list[User]:
+        """Return registered users ordered by creation time."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_user_by_oauth(self, provider: str, oauth_id: str) -> User | None:
         """Get user by OAuth provider and ID.
 

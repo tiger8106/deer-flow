@@ -95,6 +95,10 @@ class LocalAuthProvider(AuthProvider):
         """Return number of admin users."""
         return await self._repo.count_admin_users()
 
+    async def list_users(self) -> list[User]:
+        """Return the minimal account directory source records."""
+        return await self._repo.list_users()
+
     async def update_user(self, user: User) -> User:
         """Update an existing user."""
         return await self._repo.update_user(user)
