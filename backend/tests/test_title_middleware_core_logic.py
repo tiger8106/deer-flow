@@ -12,6 +12,7 @@ from deerflow.agents.middlewares import title_middleware as title_middleware_mod
 from deerflow.agents.middlewares.dynamic_context_middleware import _DYNAMIC_CONTEXT_REMINDER_KEY
 from deerflow.agents.middlewares.title_middleware import TitleMiddleware
 from deerflow.config.title_config import TitleConfig, get_title_config, set_title_config
+from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY
 
 
 def _clone_title_config(config: TitleConfig) -> TitleConfig:
@@ -93,6 +94,35 @@ class TestTitleMiddlewareCoreLogic:
         }
 
         assert middleware._should_generate_title(state) is False
+
+    def test_should_wait_for_final_answer_after_image_tool_call(self):
+        _set_test_title_config(enabled=True)
+        middleware = TitleMiddleware()
+        user_message = HumanMessage(
+            content="<uploaded_files>\n- screenshot.png\n</uploaded_files>\n\n图中是什么界面？",
+            additional_kwargs={
+                "files": [{"filename": "screenshot.png"}],
+                ORIGINAL_USER_CONTENT_KEY: "图中是什么界面？",
+            },
+        )
+        tool_call_message = AIMessage(
+            content="",
+            tool_calls=[{"name": "view_image", "args": {"image_path": "screenshot.png"}, "id": "call-1"}],
+        )
+
+        assert middleware._should_generate_title({"messages": [user_message, tool_call_message]}) is False
+        assert (
+            middleware._should_generate_title(
+                {
+                    "messages": [
+                        user_message,
+                        tool_call_message,
+                        AIMessage(content="图中展示的是角色授权管理界面。"),
+                    ]
+                }
+            )
+            is True
+        )
 
     def test_generate_title_uses_async_model_and_respects_max_chars(self, monkeypatch):
         _set_test_title_config(max_chars=12, model_name="title-model")
@@ -178,6 +208,84 @@ class TestTitleMiddlewareCoreLogic:
         title = result["title"]
 
         assert title == "请帮我总结这段代码"
+
+    def test_image_upload_uses_default_model_with_clean_question_and_final_answer(self, monkeypatch):
+        _set_test_title_config(max_chars=30, model_name=None)
+        middleware = TitleMiddleware()
+        model = MagicMock()
+        model.ainvoke = AsyncMock(return_value=AIMessage(content="角色授权窄屏布局优化"))
+        create_chat_model = MagicMock(return_value=model)
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
+
+        state = {
+            "messages": [
+                HumanMessage(
+                    content=("<uploaded_files>\nThe following files were uploaded in this message:\n- filename: screenshot.png\n</uploaded_files>\n\n这个界面在窄屏时为什么重叠？"),
+                    additional_kwargs={
+                        "files": [{"filename": "screenshot.png"}],
+                        ORIGINAL_USER_CONTENT_KEY: "这个界面在窄屏时为什么重叠？",
+                    },
+                ),
+                AIMessage(
+                    content="",
+                    tool_calls=[{"name": "view_image", "args": {"image_path": "screenshot.png"}, "id": "call-1"}],
+                ),
+                AIMessage(content="图片是角色授权界面，角色列与授权范围列在窄屏下发生重叠。"),
+            ]
+        }
+
+        result = asyncio.run(middleware._agenerate_title_result(state))
+
+        assert result == {"title": "角色授权窄屏布局优化"}
+        create_chat_model.assert_called_once_with(name=None, thinking_enabled=False, attach_tracing=False)
+        prompt = model.ainvoke.await_args.args[0]
+        assert "这个界面在窄屏时为什么重叠？" in prompt
+        assert "图片是角色授权界面" in prompt
+        assert "<uploaded_files>" not in prompt
+        assert "The following files were uploaded" not in prompt
+
+    def test_non_image_upload_keeps_local_title_and_removes_upload_protocol(self, monkeypatch):
+        _set_test_title_config(max_chars=30, model_name=None)
+        middleware = TitleMiddleware()
+        create_chat_model = MagicMock()
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
+        state = {
+            "messages": [
+                HumanMessage(
+                    content="<uploaded_files>\n- report.pdf\n</uploaded_files>\n\n请总结报告",
+                    additional_kwargs={ORIGINAL_USER_CONTENT_KEY: "请总结报告", "files": [{"filename": "report.pdf"}]},
+                ),
+                AIMessage(content="报告主要介绍年度经营情况。"),
+            ]
+        }
+
+        result = asyncio.run(middleware._agenerate_title_result(state))
+
+        assert result == {"title": "请总结报告"}
+        create_chat_model.assert_not_called()
+
+    def test_image_title_model_failure_falls_back_to_question_and_extracted_information(self, monkeypatch):
+        _set_test_title_config(max_chars=40, model_name=None)
+        middleware = TitleMiddleware()
+        model = MagicMock()
+        model.ainvoke = AsyncMock(side_effect=RuntimeError("model unavailable"))
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", MagicMock(return_value=model))
+        state = {
+            "messages": [
+                HumanMessage(
+                    content="<uploaded_files>\n- chart.jpg\n</uploaded_files>\n\n图中趋势如何？",
+                    additional_kwargs={ORIGINAL_USER_CONTENT_KEY: "图中趋势如何？", "files": [{"filename": "chart.jpg"}]},
+                ),
+                AIMessage(content="图中销售额从一月到六月持续增长。"),
+            ]
+        }
+
+        result = asyncio.run(middleware._agenerate_title_result(state))
+
+        assert "图中趋势如何" in result["title"]
+        assert "销售额" in result["title"]
+        assert "<uploaded_files>" not in result["title"]
+        assert len(result["title"]) <= 40
 
     def test_generate_title_fallback_for_long_message(self, monkeypatch):
         _set_test_title_config(max_chars=20, model_name="title-model")
@@ -412,6 +520,17 @@ class TestTitleMiddlewareCoreLogic:
         assert user_msg == "请帮我写测试"
         assert "<system-reminder>" not in prompt
         assert "User prefers Python" not in prompt
+
+    def test_get_title_user_message_strips_upload_block_without_original_marker(self):
+        middleware = TitleMiddleware()
+        state = {
+            "messages": [
+                HumanMessage(content="<uploaded_files>\n- legacy.png\n</uploaded_files>\n\n请说明图中内容"),
+                AIMessage(content="图中是一个知识库界面。"),
+            ]
+        }
+
+        assert middleware._get_title_user_message(state) == "请说明图中内容"
 
     def test_should_generate_title_partial_exchange_allows_user_only(self):
         """Interrupted-run path can produce a fallback from a lone human message."""

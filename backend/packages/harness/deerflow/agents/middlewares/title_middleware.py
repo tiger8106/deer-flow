@@ -2,6 +2,7 @@
 
 import logging
 import re
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, NotRequired, override
 
 from langchain.agents import AgentState
@@ -13,12 +14,17 @@ from langgraph.runtime import Runtime
 from deerflow.agents.middlewares.dynamic_context_middleware import is_dynamic_context_reminder
 from deerflow.config.title_config import get_title_config
 from deerflow.models import create_chat_model
+from deerflow.utils.messages import get_original_user_content_text
 
 if TYPE_CHECKING:
     from deerflow.config.app_config import AppConfig
     from deerflow.config.title_config import TitleConfig
 
 logger = logging.getLogger(__name__)
+
+_UPLOAD_BLOCK_RE = re.compile(r"<uploaded_files>[\s\S]*?</uploaded_files>\s*", re.IGNORECASE)
+_IMAGE_EXTENSIONS = frozenset({".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"})
+_IMAGE_CONTENT_TYPES = frozenset({"image", "image_url", "input_image"})
 
 
 class TitleMiddlewareState(AgentState):
@@ -81,6 +87,24 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         return getattr(message, "content", "")
 
     @staticmethod
+    def _message_additional_kwargs(message: object) -> Mapping[str, Any]:
+        if isinstance(message, dict):
+            additional_kwargs = message.get("additional_kwargs")
+        else:
+            additional_kwargs = getattr(message, "additional_kwargs", None)
+        return additional_kwargs if isinstance(additional_kwargs, Mapping) else {}
+
+    @staticmethod
+    def _message_tool_calls(message: object) -> object:
+        if isinstance(message, dict):
+            tool_calls = message.get("tool_calls")
+        else:
+            tool_calls = getattr(message, "tool_calls", None)
+        if tool_calls:
+            return tool_calls
+        return TitleMiddleware._message_additional_kwargs(message).get("tool_calls")
+
+    @staticmethod
     def _is_dynamic_context_reminder_message(message: object) -> bool:
         if is_dynamic_context_reminder(message):
             return True
@@ -95,8 +119,92 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
 
     def _get_title_user_message(self, state: TitleMiddlewareState) -> str:
         messages = state.get("messages") or []
-        user_msg_content = next((self._message_content(m) for m in messages if self._is_user_message_for_title(m)), "")
-        return self._normalize_content(user_msg_content)
+        user_message = next((m for m in messages if self._is_user_message_for_title(m)), None)
+        if user_message is None:
+            return ""
+
+        # UploadsMiddleware preserves the pre-injection text in
+        # ``original_user_content``. Prefer it so internal upload instructions
+        # never become a visible thread title. The regex remains as a backwards-
+        # compatible fallback for checkpoints created before that marker existed.
+        user_msg = get_original_user_content_text(
+            self._message_content(user_message),
+            self._message_additional_kwargs(user_message),
+        )
+        return _UPLOAD_BLOCK_RE.sub("", user_msg).strip()
+
+    def _get_title_assistant_message(self, state: TitleMiddlewareState) -> str:
+        """Return the latest completed assistant answer, excluding tool-call turns."""
+        messages = state.get("messages") or []
+        for message in reversed(messages):
+            if self._message_type(message) != "ai" or self._message_tool_calls(message):
+                continue
+            content = self._strip_think_tags(self._normalize_content(self._message_content(message)))
+            if content:
+                return content
+        return ""
+
+    def _has_image_upload(self, state: TitleMiddlewareState) -> bool:
+        """Detect image attachments without depending on frontend-only metadata."""
+        messages = state.get("messages") or []
+        user_message = next((m for m in messages if self._is_user_message_for_title(m)), None)
+        if user_message is None:
+            return False
+
+        files = self._message_additional_kwargs(user_message).get("files")
+        if isinstance(files, list):
+            for file in files:
+                if not isinstance(file, Mapping):
+                    continue
+                filename = file.get("filename") or file.get("name")
+                if isinstance(filename, str) and any(filename.lower().endswith(extension) for extension in _IMAGE_EXTENSIONS):
+                    return True
+                mime_type = file.get("mime_type") or file.get("type")
+                if isinstance(mime_type, str) and mime_type.lower().startswith("image/"):
+                    return True
+
+        content = self._message_content(user_message)
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, Mapping) and block.get("type") in _IMAGE_CONTENT_TYPES:
+                    return True
+
+        upload_block = _UPLOAD_BLOCK_RE.search(self._normalize_content(content))
+        return bool(
+            upload_block
+            and re.search(
+                r"\.(?:bmp|gif|jpe?g|png|tiff?|webp)(?:\b|$)",
+                upload_block.group(0),
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _image_fallback_title(self, state: TitleMiddlewareState, user_msg: str) -> str:
+        """Keep both the question and extracted image information in a local fallback."""
+        assistant_msg = self._get_title_assistant_message(state)
+        if not assistant_msg:
+            return self._fallback_title(user_msg)
+
+        # The title model normally produces the semantic summary. If that call
+        # is unavailable, use the first meaningful answer line and reserve space
+        # for both sides instead of falling back to an upload protocol string.
+        answer_line = next((line.strip() for line in assistant_msg.splitlines() if line.strip()), "")
+        answer_line = re.sub(r"^[#>*+\-\d.\s]+", "", answer_line)
+        answer_line = re.sub(r"[*_`]+", "", answer_line).strip()
+
+        config = self._get_title_config()
+        limit = min(config.max_chars, 50)
+        separator = " · "
+        if not user_msg:
+            return self._fallback_title(answer_line)
+        if not answer_line or limit <= len(separator) + 2:
+            return self._fallback_title(user_msg)
+
+        user_limit = max(1, min(len(user_msg), limit // 2))
+        answer_limit = max(1, limit - len(separator) - user_limit)
+        user_part = user_msg[:user_limit].rstrip()
+        answer_part = answer_line[:answer_limit].rstrip()
+        return f"{user_part}{separator}{answer_part}"
 
     def _should_generate_title(self, state: TitleMiddlewareState, *, allow_partial_exchange: bool = False) -> bool:
         """Check if we should generate a title for this thread."""
@@ -118,7 +226,7 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
 
         # Count user and assistant messages
         user_messages = [m for m in messages if self._is_user_message_for_title(m)]
-        assistant_messages = [m for m in messages if self._message_type(m) == "ai"]
+        assistant_messages = [m for m in messages if self._message_type(m) == "ai" and not self._message_tool_calls(m) and self._strip_think_tags(self._normalize_content(self._message_content(m)))]
 
         # Normal path: title only after first complete exchange. Interrupted path
         # (``allow_partial_exchange=True``) accepts a lone first-turn user message
@@ -132,18 +240,21 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         Returns (prompt_string, user_msg) so callers can use user_msg as fallback.
         """
         config = self._get_title_config()
-        messages = state.get("messages") or []
-
-        assistant_msg_content = next((self._message_content(m) for m in messages if self._message_type(m) == "ai"), "")
-
         user_msg = self._get_title_user_message(state)
-        assistant_msg = self._strip_think_tags(self._normalize_content(assistant_msg_content))
+        assistant_msg = self._get_title_assistant_message(state)
 
         prompt = config.prompt_template.format(
             max_words=config.max_words,
             user_msg=user_msg[:500],
             assistant_msg=assistant_msg[:500],
         )
+        if self._has_image_upload(state):
+            prompt = (
+                "An image was uploaded. Summarize both the concrete information extracted from the image "
+                "in the assistant answer and the user's question or intent. Never include upload metadata, "
+                "file paths, or internal tags in the title.\n\n"
+                f"{prompt}"
+            )
         return prompt, user_msg
 
     def _strip_think_tags(self, text: str) -> str:
@@ -194,6 +305,8 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
             return None
 
         user_msg = self._get_title_user_message(state)
+        if self._has_image_upload(state) and not allow_partial_exchange:
+            return {"title": self._image_fallback_title(state, user_msg)}
         return {"title": self._fallback_title(user_msg)}
 
     async def _agenerate_title_result(self, state: TitleMiddlewareState) -> dict | None:
@@ -202,7 +315,8 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
             return None
 
         config = self._get_title_config()
-        if not config.model_name:
+        has_image_upload = self._has_image_upload(state)
+        if not config.model_name and not has_image_upload:
             user_msg = self._get_title_user_message(state)
             return {"title": self._fallback_title(user_msg)}
 
@@ -224,6 +338,8 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
                 return {"title": title}
         except Exception:
             logger.debug("Failed to generate async title; falling back to local title", exc_info=True)
+        if has_image_upload:
+            return {"title": self._image_fallback_title(state, user_msg)}
         return {"title": self._fallback_title(user_msg)}
 
     @override
