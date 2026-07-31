@@ -230,6 +230,13 @@ class TestTitleMiddlewareCoreLogic:
                     content="",
                     tool_calls=[{"name": "view_image", "args": {"image_path": "screenshot.png"}, "id": "call-1"}],
                 ),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "The following image has been viewed:"},
+                        {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                    ],
+                    additional_kwargs={"hide_from_ui": True},
+                ),
                 AIMessage(content="图片是角色授权界面，角色列与授权范围列在窄屏下发生重叠。"),
             ]
         }

@@ -115,7 +115,15 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
 
     @staticmethod
     def _is_user_message_for_title(message: object) -> bool:
-        return TitleMiddleware._message_type(message) == "human" and not TitleMiddleware._is_dynamic_context_reminder_message(message)
+        if TitleMiddleware._message_type(message) != "human":
+            return False
+        if TitleMiddleware._is_dynamic_context_reminder_message(message):
+            return False
+        # ViewImageMiddleware, TodoMiddleware and other framework components
+        # inject hidden HumanMessages while completing the first user turn.
+        # They are model context, not additional user turns, and must not stop
+        # first-exchange title generation.
+        return not bool(TitleMiddleware._message_additional_kwargs(message).get("hide_from_ui"))
 
     def _get_title_user_message(self, state: TitleMiddlewareState) -> str:
         messages = state.get("messages") or []
