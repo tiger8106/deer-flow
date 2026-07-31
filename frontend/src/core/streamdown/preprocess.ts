@@ -264,7 +264,9 @@ function flattenDisplayMathBody(lines: string[]): string[] {
  * responses. Compacting the content between the opening and closing `$$`
  * preserves the LaTeX semantics (visual line breaks still come from `\\`,
  * `aligned`, `matrix`, `cases`, etc.) while keeping the display-math block
- * atomic for Streamdown's splitter.
+ * atomic for Streamdown's splitter. A complete `$$ ... $$` expression on one
+ * line must also be expanded to three lines: remark-math otherwise classifies
+ * it as inline math, where display-only commands such as `\tag` fail in KaTeX.
  */
 export function compactDisplayMathBlocks(markdown: string): string {
   if (!markdown.includes("$$")) {
@@ -284,6 +286,14 @@ export function compactDisplayMathBlocks(markdown: string): string {
 
     if (insideFence || (INDENTED_CODE_RE.test(line) && mathLines === null)) {
       output.push(line);
+      continue;
+    }
+
+    const singleLineDisplay = /^\s*\$\$\s*(\S[\s\S]*?\S|\S)\s*\$\$\s*$/.exec(
+      line,
+    );
+    if (singleLineDisplay && mathLines === null) {
+      output.push("$$", singleLineDisplay[1]!, "$$");
       continue;
     }
 

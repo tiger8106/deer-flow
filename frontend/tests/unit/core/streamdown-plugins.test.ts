@@ -40,3 +40,13 @@ test("does not add heading anchors to the shared streamdown plugin config", () =
 
   expect(html).not.toContain('id="summary"');
 });
+
+test("renders a numbered one-line display equation without a KaTeX error", () => {
+  const html = renderSharedMarkdown(
+    "$$ \\sigma_{\\max} = \\frac{F}{A}\\tag{3-1} $$",
+  );
+
+  expect(html).toContain('class="katex-display"');
+  expect(html).toContain("tag");
+  expect(html).not.toContain("katex-error");
+});

@@ -157,6 +157,29 @@ test("compactDisplayMathBlocks keeps display math as display math", () => {
   expect(compactDisplayMathBlocks(input)).toBe(expected);
 });
 
+test("compactDisplayMathBlocks expands a numbered one-line display equation", () => {
+  const input =
+    "$$ \\sigma_{\\max} = \\frac{F}{A}\\tag{3-1} $$";
+  const expected = [
+    "$$",
+    "\\sigma_{\\max} = \\frac{F}{A}\\tag{3-1}",
+    "$$",
+  ].join("\n");
+  expect(compactDisplayMathBlocks(input)).toBe(expected);
+});
+
+test("compactDisplayMathBlocks preserves one-line equations in code blocks", () => {
+  const fenced = [
+    "```latex",
+    "$$ \\sigma_{\\max} = \\frac{F}{A}\\tag{3-1} $$",
+    "```",
+  ].join("\n");
+  const indented = "    $$ x = y $$";
+
+  expect(compactDisplayMathBlocks(fenced)).toBe(fenced);
+  expect(compactDisplayMathBlocks(indented)).toBe(indented);
+});
+
 test("compactDisplayMathBlocks preserves TeX comments in display math", () => {
   const input = ["Before", "$$", "a % step 1", "+ b", "$$", "After"].join("\n");
   expect(compactDisplayMathBlocks(input)).toBe(input);
