@@ -168,6 +168,20 @@ test("compactDisplayMathBlocks expands a numbered one-line display equation", ()
   expect(compactDisplayMathBlocks(input)).toBe(expected);
 });
 
+test("compactDisplayMathBlocks moves trailing citations after the display equation", () => {
+  const input =
+    "$$ \\mathbf{a} = \\left(\\frac{3FR}{4E_0}\\right)^{1/3}\\tag{3-3} $$ " +
+    "[citation: 1](http://localhost/preview)";
+  const expected = [
+    "$$",
+    "\\mathbf{a} = \\left(\\frac{3FR}{4E_0}\\right)^{1/3}\\tag{3-3}",
+    "$$",
+    "[citation: 1](http://localhost/preview)",
+  ].join("\n");
+
+  expect(compactDisplayMathBlocks(input)).toBe(expected);
+});
+
 test("compactDisplayMathBlocks preserves one-line equations in code blocks", () => {
   const fenced = [
     "```latex",

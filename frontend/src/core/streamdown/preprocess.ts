@@ -289,11 +289,15 @@ export function compactDisplayMathBlocks(markdown: string): string {
       continue;
     }
 
-    const singleLineDisplay = /^\s*\$\$\s*(\S[\s\S]*?\S|\S)\s*\$\$\s*$/.exec(
+    const singleLineDisplay = /^\s*\$\$\s*(\S[\s\S]*?\S|\S)\s*\$\$(.*)$/.exec(
       line,
     );
     if (singleLineDisplay && mathLines === null) {
       output.push("$$", singleLineDisplay[1]!, "$$");
+      const trailingContent = singleLineDisplay[2]!.trimStart();
+      if (trailingContent) {
+        output.push(trailingContent);
+      }
       continue;
     }
 

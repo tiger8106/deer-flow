@@ -50,3 +50,14 @@ test("renders a numbered one-line display equation without a KaTeX error", () =>
   expect(html).toContain("tag");
   expect(html).not.toContain("katex-error");
 });
+
+test("renders a numbered display equation followed by a citation", () => {
+  const html = renderSharedMarkdown(
+    "$$ \\mathbf{a} = \\left(\\frac{3FR}{4E_0}\\right)^{1/3}\\tag{3-3} $$ " +
+      "[citation: 1](http://localhost/preview)",
+  );
+
+  expect(html).toContain('class="katex-display"');
+  expect(html).toContain('href="http://localhost/preview"');
+  expect(html).not.toContain("katex-error");
+});
