@@ -22,6 +22,7 @@ import {
 } from "../artifacts";
 import { useExternalPreview } from "../external-preview";
 import { clampPreviewPanelPercent } from "../external-preview/layout";
+import { useCloseExternalPreviewOnThreadChange } from "../external-preview/thread-lifecycle";
 import { useThread } from "../messages/context";
 import { SidecarPanel, useMaybeSidecar } from "../sidecar";
 
@@ -51,6 +52,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const sidecar = useMaybeSidecar();
   const sidecarOpen = sidecar?.open ?? false;
   const externalPreview = useExternalPreview();
+  useCloseExternalPreviewOnThreadChange(threadId, externalPreview.close);
   const externalPreviewOpen = externalPreview.preview !== null;
   const [externalPreviewFullscreen, setExternalPreviewFullscreen] =
     useState(false);

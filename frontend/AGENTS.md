@@ -91,7 +91,9 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   navigation, and highlighting in the external module.
 - `components/workspace/chats/chat-box.tsx` arbitrates external preview,
   sidecar, and artifact panels in that priority order and handles same-origin
-  `deerflow:external-preview:*` messages from the embedded page.
+  `deerflow:external-preview:*` messages from the embedded page. External
+  previews are scoped to the active thread and must close when the thread
+  changes or the chat view unmounts.
 - `DEER_FLOW_WORKSPACE_APPS` is a deployment-owned JSON array consumed by the
   server layout. `core/workspace-apps` validates it, `/workspace/[app_id]`
   renders the iframe, and the sidebar renders its configured entries. DeerFlow

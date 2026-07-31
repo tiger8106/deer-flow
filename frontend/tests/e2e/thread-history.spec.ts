@@ -232,6 +232,76 @@ test.describe("Thread history", () => {
     await expect(page.getByPlaceholder(/how can i assist you/i)).toBeVisible();
   });
 
+  test("closes the external document preview when leaving or deleting a chat", async ({
+    page,
+  }) => {
+    const sourceMessage = {
+      type: "ai",
+      id: "msg-ai-source-preview",
+      content:
+        "Source [citation: 1](/knowledge/citation-preview?preview=side-panel&preview_key=knowledge-document%3Adoc-1&title=Knowledge%20source)",
+    };
+    mockLangGraphAPI(page, {
+      threads: [
+        {
+          ...THREADS[0]!,
+          messages: [sourceMessage],
+        },
+        THREADS[1]!,
+      ],
+    });
+    await page.route("**/knowledge/citation-preview?**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<main>Knowledge source preview</main>",
+      }),
+    );
+
+    const openPreview = async () => {
+      await page.getByRole("link", { name: "[1]" }).first().click();
+      await expect(
+        page.locator('iframe[title="Knowledge source"]'),
+      ).toBeVisible();
+    };
+
+    await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
+    await openPreview();
+
+    await page.getByText("Second conversation").click();
+    await page.waitForURL(`**/workspace/chats/${MOCK_THREAD_ID_2}`);
+    await expect(page.locator('iframe[title="Knowledge source"]')).toHaveCount(
+      0,
+    );
+
+    await page.getByText("First conversation").click();
+    await page.waitForURL(`**/workspace/chats/${MOCK_THREAD_ID}`);
+    await openPreview();
+    await page
+      .locator("[data-sidebar='sidebar'] a[href='/workspace/chats/new']")
+      .click();
+    await page.waitForURL("**/workspace/chats/new");
+    await expect(page.locator('iframe[title="Knowledge source"]')).toHaveCount(
+      0,
+    );
+
+    await page.getByText("First conversation").click();
+    await page.waitForURL(`**/workspace/chats/${MOCK_THREAD_ID}`);
+    await openPreview();
+    const activeThreadItem = page
+      .locator("[data-sidebar='sidebar']")
+      .locator("[data-sidebar='menu-item']")
+      .filter({ hasText: "First conversation" })
+      .first();
+    await activeThreadItem.hover();
+    await activeThreadItem.getByRole("button", { name: /more/i }).click();
+    await page.getByRole("menuitem", { name: /delete/i }).click();
+    await page.waitForURL("**/workspace/chats/new");
+    await expect(page.locator('iframe[title="Knowledge source"]')).toHaveCount(
+      0,
+    );
+  });
+
   test("new chat does not show previous optimistic user message after client-side navigation", async ({
     page,
   }) => {
