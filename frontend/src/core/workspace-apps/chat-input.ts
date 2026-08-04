@@ -36,15 +36,41 @@ export type ComposerScopeRef = Pick<ComposerScopeNode, "kind" | "id">;
 export function toggleComposerScope(
   scopes: ComposerScopeRef[],
   target: ComposerScopeRef,
+  nodes: ComposerScopeNode[],
 ): ComposerScopeRef[] {
-  const exists = scopes.some(
-    (scope) => scope.kind === target.kind && scope.id === target.id,
-  );
-  return exists
-    ? scopes.filter(
-        (scope) => scope.kind !== target.kind || scope.id !== target.id,
-      )
-    : [...scopes, target];
+  const scopeKey = (scope: ComposerScopeRef) => `${scope.kind}:${scope.id}`;
+  const targetKey = scopeKey(target);
+  if (scopes.some((scope) => scopeKey(scope) === targetKey)) {
+    return scopes.filter((scope) => scopeKey(scope) !== targetKey);
+  }
+
+  const overlapping = new Set<string>();
+  const collectDescendants = (node: ComposerScopeNode) => {
+    for (const child of node.children) {
+      overlapping.add(scopeKey(child));
+      collectDescendants(child);
+    }
+  };
+  const findTarget = (
+    candidates: ComposerScopeNode[],
+    ancestors: ComposerScopeRef[],
+  ): boolean => {
+    for (const node of candidates) {
+      if (scopeKey(node) === targetKey) {
+        ancestors.forEach((ancestor) => overlapping.add(scopeKey(ancestor)));
+        collectDescendants(node);
+        return true;
+      }
+      if (findTarget(node.children, [...ancestors, node])) return true;
+    }
+    return false;
+  };
+  findTarget(nodes, []);
+
+  return [
+    ...scopes.filter((scope) => !overlapping.has(scopeKey(scope))),
+    target,
+  ];
 }
 
 export function findComposerScopeLabel(

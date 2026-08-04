@@ -32,16 +32,39 @@ describe("workspace app chat input", () => {
     });
   });
 
-  it("toggles multiple independent scopes", () => {
-    const dataset = { kind: "collection" as const, id: "dataset-1" };
+  it("keeps unrelated scopes but removes overlapping ancestors and descendants", () => {
+    const root = { kind: "collection" as const, id: "root" };
+    const child = { kind: "collection" as const, id: "child" };
     const document = { kind: "document" as const, id: "doc-1" };
+    const unrelated = { kind: "collection" as const, id: "unrelated" };
+    const nodes = [
+      {
+        ...root,
+        label: "根目录",
+        children: [
+          {
+            ...child,
+            label: "子目录",
+            children: [{ ...document, label: "制度.pdf", children: [] }],
+          },
+        ],
+      },
+      { ...unrelated, label: "其他目录", children: [] },
+    ];
 
-    expect(toggleComposerScope([dataset], document)).toEqual([
-      dataset,
+    expect(toggleComposerScope([root, unrelated], child, nodes)).toEqual([
+      unrelated,
+      child,
+    ]);
+    expect(toggleComposerScope([root, unrelated], document, nodes)).toEqual([
+      unrelated,
       document,
     ]);
-    expect(toggleComposerScope([dataset, document], dataset)).toEqual([
-      document,
+    expect(
+      toggleComposerScope([child, document, unrelated], root, nodes),
+    ).toEqual([unrelated, root]);
+    expect(toggleComposerScope([child, unrelated], child, nodes)).toEqual([
+      unrelated,
     ]);
   });
 

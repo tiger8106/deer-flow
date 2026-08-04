@@ -136,7 +136,7 @@ export function ComposerExtensionPicker({
   const toggleScope = (target: ComposerScopeRef) => {
     onChange({
       enabled: value?.enabled ?? false,
-      scopes: toggleComposerScope(scopes, target),
+      scopes: toggleComposerScope(scopes, target, nodes),
     });
   };
 
