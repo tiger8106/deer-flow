@@ -147,6 +147,11 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    `context.extensions[app_id]` data; the application remains responsible for
    authorization, scope semantics, and tool behavior.
 
+   The Tiger distribution applies a presentation-only white label: `/` enters
+   through login, authentication and workspace chrome use the Tiger brand, and
+   upstream project links plus channels/about settings are omitted. Internal
+   package names, APIs, protocol keys, and the agent runtime remain unchanged.
+
    <details>
    <summary>Manual model configuration examples</summary>
 
