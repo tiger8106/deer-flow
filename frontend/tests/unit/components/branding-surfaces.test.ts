@@ -41,6 +41,16 @@ test("workspace menus do not expose upstream links, channels, or about", () => {
   expect(nav).not.toContain("contactUs");
 });
 
+test("settings-menu workspace apps open in a settings-sized dialog", () => {
+  const nav = source("src/components/workspace/workspace-nav-menu.tsx");
+
+  expect(nav).toContain("setDialogApp(app)");
+  expect(nav).toContain("h-[75vh]");
+  expect(nav).toContain("sm:max-w-5xl md:max-w-6xl");
+  expect(nav).toContain("src={dialogApp.embedUrl}");
+  expect(nav).not.toContain("router.push(app.href)");
+});
+
 test("Tiger logo is present and active branding surfaces use Tiger", () => {
   expect(
     existsSync(resolve(FRONTEND_ROOT, "public/images/tiger-logo.png")),

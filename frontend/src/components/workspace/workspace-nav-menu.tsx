@@ -1,9 +1,13 @@
 "use client";
 
 import { ChevronsUpDown, Settings2Icon, SettingsIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +58,7 @@ export function WorkspaceNavMenu({
   workspaceApps: WorkspaceApp[];
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dialogApp, setDialogApp] = useState<WorkspaceApp | null>(null);
   const [settingsDefaultSection, setSettingsDefaultSection] = useState<
     "appearance" | "memory" | "tools" | "skills" | "notification"
   >("appearance");
@@ -61,7 +66,6 @@ export function WorkspaceNavMenu({
   const { open: isSidebarOpen } = useSidebar();
   const { locale, t } = useI18n();
   const { user } = useAuth();
-  const router = useRouter();
   const settingsMenuApps = workspaceApps.filter(
     (app) =>
       app.placement === "settings-menu" &&
@@ -79,6 +83,28 @@ export function WorkspaceNavMenu({
         onOpenChange={setSettingsOpen}
         defaultSection={settingsDefaultSection}
       />
+      <Dialog
+        open={dialogApp !== null}
+        onOpenChange={(open) => {
+          if (!open) setDialogApp(null);
+        }}
+      >
+        <DialogContent
+          className="h-[75vh] max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-5xl md:max-w-6xl"
+          aria-describedby={undefined}
+        >
+          <DialogTitle className="sr-only">
+            {dialogApp ? getWorkspaceAppLabel(dialogApp, locale) : ""}
+          </DialogTitle>
+          {dialogApp && (
+            <iframe
+              className="size-full min-h-0 border-0"
+              src={dialogApp.embedUrl}
+              title={getWorkspaceAppLabel(dialogApp, locale)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       <SidebarMenu className="w-full">
         <SidebarMenuItem>
           {mounted ? (
@@ -109,7 +135,7 @@ export function WorkspaceNavMenu({
                   {settingsMenuApps.map((app) => (
                     <DropdownMenuItem
                       key={app.id}
-                      onClick={() => router.push(app.href)}
+                      onClick={() => setDialogApp(app)}
                     >
                       <WorkspaceAppIcon name={app.icon} />
                       {getWorkspaceAppLabel(app, locale)}

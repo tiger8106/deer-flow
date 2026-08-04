@@ -141,8 +141,9 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    Runtime deployments can also register same-origin iframe applications with
    `DEER_FLOW_WORKSPACE_APPS`; the generic `/workspace/[app_id]` route and
    navigation consume that JSON without adding application-specific source files.
-   The optional `placement: "settings-menu"` renders an app alongside Settings,
-   while `requiredSystemRole` gates its navigation entry and server route.
+   The optional `placement: "settings-menu"` renders an app alongside Settings
+   and opens it in the same-sized floating dialog, while `requiredSystemRole`
+   gates its navigation entry and server route.
    An application may additionally provide `chatInput.scopeEndpoint` plus
    localized `chatInput.labels` and `chatInput.allLabel` values. The composer then renders a generic
    scope tree and forwards the active selection as opaque, run-scoped
