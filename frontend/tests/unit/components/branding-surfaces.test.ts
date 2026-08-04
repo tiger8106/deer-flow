@@ -12,11 +12,18 @@ function source(path: string) {
 test("public root enters through login instead of the upstream landing page", () => {
   const page = source("src/app/page.tsx");
   const login = source("src/app/(auth)/login/page.tsx");
+  const authProvider = source("src/core/auth/AuthProvider.tsx");
+  const themeProvider = source("src/components/theme-provider.tsx");
 
   expect(page).toContain('redirect("/login")');
   expect(page).not.toContain("@/components/landing");
   expect(login).not.toContain("t.login.backToHome");
   expect(login).not.toContain('<Link href="/"');
+  expect(authProvider).toContain('router.replace("/login")');
+  expect(authProvider).toContain('window.location.replace("/login")');
+  expect(authProvider).not.toContain('router.push("/")');
+  expect(authProvider).not.toContain('window.location.href = "/"');
+  expect(themeProvider).not.toContain("forcedTheme");
 });
 
 test("workspace menus do not expose upstream links, channels, or about", () => {

@@ -98,19 +98,17 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
    * Logout - call FastAPI logout endpoint and clear local state
    * Per RFC-001: Immediately clear local state, don't wait for server confirmation
    *
-   * When the gateway is unreachable the fetch silently fails — the SPA
-   * router.push("/") would leave the user on "/" still holding stale
-   * React state and any in-flight SSE / fetch / query subscriptions.
-   * We therefore fall back to a hard navigation (window.location.href),
-   * which discards all client state the same way the legacy form-POST
-   * logout used to.
+   * When the gateway is unreachable the fetch silently fails. Fall back to a
+   * hard navigation so every in-flight SSE / fetch / query subscription is
+   * discarded. Both paths go straight to login: routing through the public
+   * root would add a redirect and briefly apply root-specific presentation.
    */
   const logout = useCallback(async () => {
     // Immediately clear local state to prevent UI flicker
     setUser(null);
 
     if (staticMode) {
-      router.push("/");
+      router.replace("/login");
       return;
     }
 
@@ -129,12 +127,12 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
     if (logoutFailed && typeof window !== "undefined") {
       // Hard navigation ensures every in-flight subscription is torn down,
       // matching the legacy form-POST logout behaviour during a gateway outage.
-      window.location.href = "/";
+      window.location.replace("/login");
       return;
     }
 
-    // Redirect to home page
-    router.push("/");
+    // Replace the protected route so browser back cannot reopen its stale UI.
+    router.replace("/login");
   }, [staticMode, router]);
 
   /**
