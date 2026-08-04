@@ -11,9 +11,12 @@ function source(path: string) {
 
 test("public root enters through login instead of the upstream landing page", () => {
   const page = source("src/app/page.tsx");
+  const login = source("src/app/(auth)/login/page.tsx");
 
   expect(page).toContain('redirect("/login")');
   expect(page).not.toContain("@/components/landing");
+  expect(login).not.toContain("t.login.backToHome");
+  expect(login).not.toContain('<Link href="/"');
 });
 
 test("workspace menus do not expose upstream links, channels, or about", () => {

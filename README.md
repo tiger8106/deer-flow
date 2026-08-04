@@ -149,8 +149,9 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
 
    The Tiger distribution applies a presentation-only white label: `/` enters
    through login, authentication and workspace chrome use the Tiger brand, and
-   upstream project links plus channels/about settings are omitted. Internal
-   package names, APIs, protocol keys, and the agent runtime remain unchanged.
+   upstream project links plus channels/about settings are omitted. Login does
+   not link back to `/`, which itself redirects to `/login`. Internal package
+   names, APIs, protocol keys, and the agent runtime remain unchanged.
 
    <details>
    <summary>Manual model configuration examples</summary>

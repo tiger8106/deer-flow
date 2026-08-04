@@ -88,8 +88,11 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
 - `components/tiger-brand.tsx` owns the Tiger name and white-tiger image used by
   login, setup, and workspace chrome. The public root redirects to login, and
   user-facing navigation intentionally omits upstream project links plus the
-  channels/about settings sections; keep internal package names, protocol keys,
-  and developer documentation unchanged for upstream compatibility.
+  channels/about settings sections. The login page must not link back to `/`,
+  because `/` redirects to `/login` and creates a visible navigation flash.
+  Keep internal package names, protocol keys, and developer documentation
+  unchanged for upstream compatibility. Re-audit these white-label surfaces
+  after every upstream merge.
 
 - `components/workspace/external-preview` owns generic right-panel iframe
   state. Citation URLs opt in only with `preview=side-panel`, may carry an
