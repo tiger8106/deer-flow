@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
 
 import { parseWorkspaceApps } from "@/core/workspace-apps/parse";
+import { canAccessWorkspaceApp } from "@/core/workspace-apps/types";
 
 const knowledgeApp = {
   id: "knowledge",
@@ -43,5 +44,23 @@ describe("parseWorkspaceApps", () => {
         ]),
       ),
     ).toEqual([]);
+  });
+
+  it("accepts admin settings-menu apps and enforces their display role", () => {
+    const accessControlApp = {
+      ...knowledgeApp,
+      id: "access-control",
+      href: "/workspace/access-control",
+      embedUrl: "/access-control/?embedded=1",
+      icon: "shield",
+      placement: "settings-menu" as const,
+      requiredSystemRole: "admin" as const,
+      chatInput: undefined,
+    };
+    const [parsed] = parseWorkspaceApps(JSON.stringify([accessControlApp]));
+
+    expect(parsed).toEqual(accessControlApp);
+    expect(canAccessWorkspaceApp(parsed!, "admin")).toBe(true);
+    expect(canAccessWorkspaceApp(parsed!, "user")).toBe(false);
   });
 });

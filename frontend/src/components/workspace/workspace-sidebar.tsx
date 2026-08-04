@@ -33,7 +33,7 @@ export function WorkspaceSidebar({
           {isSidebarOpen && <RecentChatList />}
         </SidebarContent>
         <SidebarFooter>
-          <WorkspaceNavMenu />
+          <WorkspaceNavMenu workspaceApps={workspaceApps} />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

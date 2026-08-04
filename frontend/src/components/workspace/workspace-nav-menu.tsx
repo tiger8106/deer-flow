@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronsUpDown, Settings2Icon, SettingsIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -16,9 +17,16 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { useI18n } from "@/core/i18n/hooks";
+import {
+  canAccessWorkspaceApp,
+  getWorkspaceAppLabel,
+  type WorkspaceApp,
+} from "@/core/workspace-apps/types";
 
 import { SettingsDialog } from "./settings";
+import { WorkspaceAppIcon } from "./workspace-app-icon";
 
 function NavMenuButtonContent({
   isSidebarOpen,
@@ -40,14 +48,25 @@ function NavMenuButtonContent({
   );
 }
 
-export function WorkspaceNavMenu() {
+export function WorkspaceNavMenu({
+  workspaceApps,
+}: {
+  workspaceApps: WorkspaceApp[];
+}) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDefaultSection, setSettingsDefaultSection] = useState<
     "appearance" | "memory" | "tools" | "skills" | "notification"
   >("appearance");
   const [mounted, setMounted] = useState(false);
   const { open: isSidebarOpen } = useSidebar();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const { user } = useAuth();
+  const router = useRouter();
+  const settingsMenuApps = workspaceApps.filter(
+    (app) =>
+      app.placement === "settings-menu" &&
+      canAccessWorkspaceApp(app, user?.system_role),
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -87,6 +106,15 @@ export function WorkspaceNavMenu() {
                     <Settings2Icon />
                     {t.common.settings}
                   </DropdownMenuItem>
+                  {settingsMenuApps.map((app) => (
+                    <DropdownMenuItem
+                      key={app.id}
+                      onClick={() => router.push(app.href)}
+                    >
+                      <WorkspaceAppIcon name={app.icon} />
+                      {getWorkspaceAppLabel(app, locale)}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -7,6 +7,8 @@ export type WorkspaceApp = {
     "zh-CN": string;
   };
   icon: string;
+  placement?: "sidebar" | "settings-menu";
+  requiredSystemRole?: "admin" | "user";
   chatInput?: {
     scopeEndpoint: string;
     labels: {
@@ -19,6 +21,13 @@ export type WorkspaceApp = {
     };
   };
 };
+
+export function canAccessWorkspaceApp(
+  app: WorkspaceApp,
+  systemRole: "admin" | "user" | undefined,
+): boolean {
+  return !app.requiredSystemRole || app.requiredSystemRole === systemRole;
+}
 
 export function getWorkspaceAppLabel(
   app: WorkspaceApp,

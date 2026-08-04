@@ -12,6 +12,8 @@ const workspaceAppSchema = z
       "zh-CN": z.string().min(1),
     }),
     icon: z.string().regex(/^[a-z0-9-]+$/),
+    placement: z.enum(["sidebar", "settings-menu"]).optional(),
+    requiredSystemRole: z.enum(["admin", "user"]).optional(),
     chatInput: z
       .object({
         scopeEndpoint: z.string().regex(/^\/(?!\/)/),

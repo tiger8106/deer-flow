@@ -28,6 +28,7 @@ from app.gateway.internal_auth import (
     get_internal_user,
     get_trusted_internal_owner_user_id,
 )
+from app.gateway.run_policy import get_run_policy_client
 from app.gateway.utils import sanitize_log_param
 from deerflow.config.app_config import get_app_config
 from deerflow.runtime import (
@@ -196,9 +197,7 @@ _CONTEXT_INTERNAL_CALLER_KEYS: frozenset[str] = frozenset({"non_interactive"})
 #   ``disable_clarification`` — set for non-interactive channels (GitHub
 #                              webhooks) so ClarificationMiddleware proceeds
 #                              instead of dead-ending the run.
-_CONTEXT_RUNTIME_ONLY_KEYS: frozenset[str] = frozenset(
-    {"github_token", "disable_clarification", "extensions"}
-)
+_CONTEXT_RUNTIME_ONLY_KEYS: frozenset[str] = frozenset({"github_token", "disable_clarification", "extensions"})
 
 
 def strip_internal_context_keys(config: dict[str, Any]) -> None:
@@ -612,6 +611,14 @@ async def start_run(
         if not allowed:
             raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
+    internal_owner_user = await resolve_trusted_internal_owner_for_attribution(request, owner_user_id)
+    policy_user = internal_owner_user or user
+    admission = await get_run_policy_client().admit(
+        body=body,
+        thread_id=thread_id,
+        user=policy_user,
+    )
+
     owner_context_token = set_current_user(SimpleNamespace(id=owner_user_id)) if owner_user_id else None
     try:
         try:
@@ -631,9 +638,14 @@ async def start_run(
                     user_id=owner_user_id,
                 )
         except ConflictError as exc:
+            await get_run_policy_client().release(admission, reason="run_conflict")
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except UnsupportedStrategyError as exc:
+            await get_run_policy_client().release(admission, reason="unsupported_strategy")
             raise HTTPException(status_code=501, detail=str(exc)) from exc
+        except Exception:
+            await get_run_policy_client().release(admission, reason="run_create_failed")
+            raise
 
         # Upsert thread metadata so the thread appears in /threads/search,
         # even for threads that were never explicitly created via POST /threads
@@ -657,29 +669,57 @@ async def start_run(
         except Exception:
             logger.warning("Failed to upsert thread_meta for %s (non-fatal)", sanitize_log_param(thread_id))
 
-        agent_factory = resolve_agent_factory(body.assistant_id)
-        command = getattr(body, "command", None)
-        if command and command.get("resume") is not None:
-            graph_input = Command(resume=command["resume"])
-        else:
-            graph_input = normalize_input(body.input)
-        config = build_run_config(thread_id, body.config, body.metadata, assistant_id=body.assistant_id)
-        await apply_checkpoint_to_run_config(config, body=body, thread_id=thread_id, request=request)
+        try:
+            agent_factory = resolve_agent_factory(body.assistant_id)
+            command = getattr(body, "command", None)
+            if command and command.get("resume") is not None:
+                graph_input = Command(resume=command["resume"])
+            else:
+                graph_input = normalize_input(body.input)
+            config = build_run_config(
+                thread_id,
+                body.config,
+                body.metadata,
+                assistant_id=body.assistant_id,
+            )
+            await apply_checkpoint_to_run_config(
+                config,
+                body=body,
+                thread_id=thread_id,
+                request=request,
+            )
 
-        # Merge DeerFlow-specific context overrides into both ``configurable`` and ``context``.
-        # The ``context`` field is a custom extension for the langgraph-compat layer
-        # that carries agent configuration (model_name, thinking_enabled, etc.).
-        # Only agent-relevant keys are forwarded; unknown keys (e.g. thread_id) are ignored.
-        is_internal_caller = getattr(getattr(request, "state", None), "auth_source", None) == AUTH_SOURCE_INTERNAL
-        merge_run_context_overrides(config, getattr(body, "context", None), internal=is_internal_caller)
-        if not is_internal_caller:
-            # ``body.config`` is free-form and copied verbatim by
-            # ``build_run_config``; scrub internal-only keys smuggled there.
-            strip_internal_context_keys(config)
-        internal_owner_user = await resolve_trusted_internal_owner_for_attribution(request, owner_user_id)
-        inject_authenticated_user_context(config, request, internal_owner_user=internal_owner_user)
+            # Merge DeerFlow-specific context overrides into both ``configurable`` and ``context``.
+            # The ``context`` field is a custom extension for the langgraph-compat layer
+            # that carries agent configuration (model_name, thinking_enabled, etc.).
+            # Only agent-relevant keys are forwarded; unknown keys (e.g. thread_id) are ignored.
+            request_state = getattr(request, "state", None)
+            is_internal_caller = getattr(request_state, "auth_source", None) == AUTH_SOURCE_INTERNAL
+            merge_run_context_overrides(
+                config,
+                getattr(body, "context", None),
+                internal=is_internal_caller,
+            )
+            if not is_internal_caller:
+                # ``body.config`` is free-form and copied verbatim by
+                # ``build_run_config``; scrub internal-only keys smuggled there.
+                strip_internal_context_keys(config)
+            inject_authenticated_user_context(
+                config,
+                request,
+                internal_owner_user=internal_owner_user,
+            )
 
-        stream_modes = normalize_stream_modes(body.stream_mode)
+            stream_modes = normalize_stream_modes(body.stream_mode)
+            await get_run_policy_client().bind(admission, record.run_id)
+        except Exception:
+            await run_mgr.set_status(
+                record.run_id,
+                RunStatus.error,
+                error="Run setup or policy reservation failed",
+            )
+            await get_run_policy_client().release(admission, reason="run_setup_failed")
+            raise
 
         task = asyncio.create_task(
             run_agent(

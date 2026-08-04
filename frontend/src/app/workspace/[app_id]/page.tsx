@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { getServerSideUser } from "@/core/auth/server";
 import { detectLocaleServer } from "@/core/i18n/server";
 import { getWorkspaceApps } from "@/core/workspace-apps/server";
 import { getWorkspaceAppLabel } from "@/core/workspace-apps/types";
@@ -12,6 +13,15 @@ export default async function WorkspaceAppPage({
   const { app_id: appId } = await params;
   const app = getWorkspaceApps().find((item) => item.id === appId);
   if (!app) notFound();
+  if (app.requiredSystemRole) {
+    const result = await getServerSideUser();
+    if (
+      result.tag !== "authenticated" ||
+      result.user.system_role !== app.requiredSystemRole
+    ) {
+      notFound();
+    }
+  }
   const locale = await detectLocaleServer();
 
   return (

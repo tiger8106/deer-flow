@@ -140,12 +140,20 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    citation URLs keep the standard external-link behavior.
    Runtime deployments can also register same-origin iframe applications with
    `DEER_FLOW_WORKSPACE_APPS`; the generic `/workspace/[app_id]` route and
-   sidebar consume that JSON without adding application-specific source files.
+   navigation consume that JSON without adding application-specific source files.
+   The optional `placement: "settings-menu"` renders an app alongside Settings,
+   while `requiredSystemRole` gates its navigation entry and server route.
    An application may additionally provide `chatInput.scopeEndpoint` plus
    localized `chatInput.labels` and `chatInput.allLabel` values. The composer then renders a generic
    scope tree and forwards the active selection as opaque, run-scoped
    `context.extensions[app_id]` data; the application remains responsible for
    authorization, scope semantics, and tool behavior.
+
+   A deployment may also set `DEER_FLOW_RUN_POLICY_URL` and
+   `DEER_FLOW_RUN_POLICY_TOKEN` to apply an external admission and terminal
+   settlement policy to top-level runs. DeerFlow reports regeneration as its own
+   request kind and never applies this hook to model retries, tools, or subagents;
+   quota and entitlement data remain owned by the external service.
 
    The Tiger distribution applies a presentation-only white label: `/` enters
    through login, authentication and workspace chrome use the Tiger brand, and

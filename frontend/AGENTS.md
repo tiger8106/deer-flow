@@ -105,7 +105,11 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   changes or the chat view unmounts.
 - `DEER_FLOW_WORKSPACE_APPS` is a deployment-owned JSON array consumed by the
   server layout. `core/workspace-apps` validates it, `/workspace/[app_id]`
-  renders the iframe, and the sidebar renders its configured entries. DeerFlow
+  renders the iframe, and the sidebar renders its configured entries. Apps may
+  use `placement: "settings-menu"` instead of the default sidebar and may set
+  `requiredSystemRole` to gate both the navigation entry and server-rendered
+  iframe route. The external application's APIs must still enforce their own
+  authorization. DeerFlow
   source must not add an application-specific route, label, or icon branch.
   Optional `chatInput` configuration exposes a generic composer scope picker;
   its endpoint returns generic collection/document nodes and its selection is

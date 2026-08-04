@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  AppWindow,
-  BotIcon,
-  CalendarClock,
-  LibraryBig,
-  MessagesSquare,
-} from "lucide-react";
+import { BotIcon, CalendarClock, MessagesSquare } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -22,21 +16,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAgentsApiEnabled } from "@/core/agents";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { useI18n } from "@/core/i18n/hooks";
 import {
+  canAccessWorkspaceApp,
   getWorkspaceAppLabel,
   type WorkspaceApp,
 } from "@/core/workspace-apps/types";
 
-const WORKSPACE_APP_ICONS = {
-  library: LibraryBig,
-} as const;
-
-function WorkspaceAppIcon({ name }: { name: string }) {
-  const Icon =
-    WORKSPACE_APP_ICONS[name as keyof typeof WORKSPACE_APP_ICONS] ?? AppWindow;
-  return <Icon />;
-}
+import { WorkspaceAppIcon } from "./workspace-app-icon";
 
 export function WorkspaceNavChatList({
   workspaceApps,
@@ -46,10 +34,16 @@ export function WorkspaceNavChatList({
   const { locale, t } = useI18n();
   const pathname = usePathname();
   const { enabled: agentsEnabled } = useAgentsApiEnabled();
+  const { user } = useAuth();
+  const sidebarApps = workspaceApps.filter(
+    (app) =>
+      (app.placement ?? "sidebar") === "sidebar" &&
+      canAccessWorkspaceApp(app, user?.system_role),
+  );
   return (
     <SidebarGroup className="pt-1">
       <SidebarMenu>
-        {workspaceApps.map((app) => (
+        {sidebarApps.map((app) => (
           <SidebarMenuItem key={app.id}>
             <SidebarMenuButton isActive={pathname.startsWith(app.href)} asChild>
               <Link className="text-muted-foreground" href={app.href}>

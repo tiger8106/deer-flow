@@ -413,6 +413,17 @@ def get_run_context(request: Request) -> RunContext:
     captured in :func:`langgraph_runtime` so callers never see a store bound
     to one backend paired with a config pointing at another.
     """
+
+    async def notify_run_completed(record) -> None:
+        try:
+            scheduled_task_service = getattr(request.app.state, "scheduled_task_service", None)
+            if scheduled_task_service is not None:
+                await scheduled_task_service.handle_run_completion(record)
+        finally:
+            from app.gateway.run_policy import get_run_policy_client
+
+            await get_run_policy_client().complete(record)
+
     return RunContext(
         checkpointer=get_checkpointer(request),
         store=get_store(request),
@@ -420,7 +431,7 @@ def get_run_context(request: Request) -> RunContext:
         run_events_config=getattr(request.app.state, "run_events_config", None),
         thread_store=get_thread_store(request),
         app_config=get_config(),
-        on_run_completed=getattr(request.app.state, "scheduled_task_service", None).handle_run_completion if getattr(request.app.state, "scheduled_task_service", None) is not None else None,
+        on_run_completed=notify_run_completed,
     )
 
 

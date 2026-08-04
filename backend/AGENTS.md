@@ -335,6 +335,14 @@ are size-limited; binary, large, and sensitive-looking paths are persisted as
 metadata only.
 
 **RunManager / RunStore contract**:
+- Deployments may configure a generic remote lifecycle policy with
+  `DEER_FLOW_RUN_POLICY_URL` and `DEER_FLOW_RUN_POLICY_TOKEN`. Gateway admits a
+  top-level run before creation, binds the admission after a run id exists, and
+  reports terminal success/error/interrupted outcomes from the completion
+  dispatcher. Creation/conflict failures release any admission. Keep policy
+  domain models outside DeerFlow and never apply the hook to internal model,
+  tool, or subagent calls. Regeneration is identified from
+  `metadata.regenerate_from_message_id` and remains a distinct top-level run.
 - `RunManager.get()` is async; direct callers must `await` it.
 - When a persistent `RunStore` is configured, `get()` and `list_by_thread()` hydrate historical runs from the store. In-memory records win for the same `run_id` so task, abort, and stream-control state stays attached to active local runs.
 - `cancel()` and `create_or_reject(..., multitask_strategy="interrupt"|"rollback")` persist interrupted status through `RunStore.update_status()`, matching normal `set_status()` transitions.
