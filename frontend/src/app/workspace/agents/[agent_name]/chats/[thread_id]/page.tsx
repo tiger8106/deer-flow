@@ -165,7 +165,7 @@ export default function AgentChatPage() {
       const sendPromise = sendMessage(
         threadId,
         message,
-        { agent_name },
+        { agent_name, ...options?.runContext },
         options,
       );
       if (message.files.length > 0) {

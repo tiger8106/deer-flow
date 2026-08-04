@@ -117,6 +117,9 @@ export interface Translations {
     voiceInputNoSpeech: string;
     voiceInputFailed: string;
     mode: string;
+    disableComposerExtension: string;
+    composerScopeLoading: string;
+    composerScopeLoadFailed: string;
     flashMode: string;
     flashModeDescription: string;
     reasoningMode: string;

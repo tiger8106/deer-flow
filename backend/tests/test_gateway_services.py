@@ -683,6 +683,23 @@ def test_merge_run_context_overrides_forwards_context_only_keys():
     assert "disable_clarification" not in config.get("configurable", {})
 
 
+def test_merge_run_context_overrides_forwards_business_extensions_only_at_runtime():
+    from app.gateway.services import build_run_config, merge_run_context_overrides
+
+    config = build_run_config("thread-1", None, None)
+    extensions = {
+        "knowledge": {
+            "enabled": True,
+            "scope": {"kind": "document", "id": "doc-1"},
+        }
+    }
+
+    merge_run_context_overrides(config, {"extensions": extensions})
+
+    assert config["context"]["extensions"] == extensions
+    assert "extensions" not in config.get("configurable", {})
+
+
 def test_merge_run_context_overrides_context_only_keys_do_not_override_existing():
     """A token already in ``config['context']`` must not be clobbered by a
     client-supplied one (defense in depth — the manager is the only legitimate

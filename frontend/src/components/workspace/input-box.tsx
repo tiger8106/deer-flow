@@ -101,6 +101,11 @@ import {
   type BrowserSpeechRecognition,
   type SpeechRecognitionErrorKind,
 } from "@/core/voice-input/speech-recognition";
+import {
+  buildComposerExtensionRunContext,
+  type ComposerExtensionSelection,
+} from "@/core/workspace-apps/chat-input";
+import { useWorkspaceApps } from "@/core/workspace-apps/context";
 import { isIMEComposing } from "@/lib/ime";
 import { cn } from "@/lib/utils";
 
@@ -121,6 +126,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
+import { ComposerExtensionPicker } from "./composer-extension-picker";
 import {
   abortGoalRequest,
   beginGoalRequest,
@@ -210,6 +216,7 @@ export type InputBoxSubmitOptions = {
   additionalKwargs?: Record<string, unknown>;
   additionalInputMessages?: Message[];
   onSent?: () => void;
+  runContext?: Record<string, unknown>;
 };
 
 type VoiceRecognitionStartOptions = {
@@ -318,6 +325,8 @@ export function InputBox({
   onStop?: () => void;
 }) {
   const { locale, t } = useI18n();
+  const workspaceApps = useWorkspaceApps();
+  const chatInputApps = workspaceApps.filter((app) => app.chatInput);
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
@@ -372,6 +381,9 @@ export function InputBox({
   const [skillSuggestionIndex, setSkillSuggestionIndex] = useState(0);
   const [selectedSlashSkill, setSelectedSlashSkill] =
     useState<SlashSuggestion | null>(null);
+  const [composerExtensions, setComposerExtensions] = useState<
+    Record<string, ComposerExtensionSelection>
+  >({});
   const [dismissedSkillSuggestionValue, setDismissedSkillSuggestionValue] =
     useState<string | null>(null);
   const lastGeneratedForAiIdRef = useRef<string | null>(null);
@@ -875,22 +887,33 @@ export function InputBox({
       const quotes = sidecar?.conversationQuotes ?? [];
       const quoteIds = quotes.map((quote) => quote.id);
       const quoteContexts = quotes.map((quote) => quote.context);
-      const submitOptions: InputBoxSubmitOptions | undefined = quotes.length
-        ? {
-            additionalKwargs: buildReferenceMessageMetadata(quoteContexts),
-            additionalInputMessages: [
-              buildHiddenConversationQuoteMessage({
-                contexts: quoteContexts,
-              }),
-            ],
-            // Clear quotes only once the send genuinely proceeds. If the send
-            // is dropped by the in-flight guard, `onSent` never fires and the
-            // quotes stay attached so they aren't silently lost.
-            onSent: () => {
-              sidecar?.clearConversationQuotes(quoteIds);
-            },
-          }
-        : undefined;
+      const extensionRunContext =
+        buildComposerExtensionRunContext(composerExtensions);
+      const hasExtensionContext = Object.keys(extensionRunContext).length > 0;
+      const submitOptions: InputBoxSubmitOptions | undefined =
+        quotes.length || hasExtensionContext
+          ? {
+              runContext: extensionRunContext,
+              additionalKwargs: quotes.length
+                ? buildReferenceMessageMetadata(quoteContexts)
+                : undefined,
+              additionalInputMessages: quotes.length
+                ? [
+                    buildHiddenConversationQuoteMessage({
+                      contexts: quoteContexts,
+                    }),
+                  ]
+                : undefined,
+              // Clear quotes only once the send genuinely proceeds. If the send
+              // is dropped by the in-flight guard, `onSent` never fires and the
+              // quotes stay attached so they aren't silently lost.
+              onSent: quotes.length
+                ? () => {
+                    sidecar?.clearConversationQuotes(quoteIds);
+                  }
+                : undefined,
+            }
+          : undefined;
       const submit = () => onSubmit?.(message, submitOptions);
 
       // Guard against submitting before the initial model auto-selection
@@ -915,6 +938,7 @@ export function InputBox({
     },
     [
       context,
+      composerExtensions,
       onContextChange,
       onSubmit,
       reportUploadLimitViolations,
@@ -2219,6 +2243,20 @@ export function InputBox({
                 </DropdownMenuGroup>
               </PromptInputActionMenuContent>
             </PromptInputActionMenu>
+            {chatInputApps.map((app) => (
+              <ComposerExtensionPicker
+                key={app.id}
+                app={app}
+                disabled={composerLocked}
+                value={composerExtensions[app.id]}
+                onChange={(selection) =>
+                  setComposerExtensions((current) => ({
+                    ...current,
+                    [app.id]: selection,
+                  }))
+                }
+              />
+            ))}
             {supportReasoningEffort && context.mode !== "flash" && (
               <PromptInputActionMenu>
                 <PromptInputActionMenuTrigger

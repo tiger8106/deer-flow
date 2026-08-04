@@ -8,6 +8,11 @@ const knowledgeApp = {
   embedUrl: "/knowledge/?embedded=1",
   labels: { "en-US": "Knowledge", "zh-CN": "知识管理" },
   icon: "library",
+  chatInput: {
+    scopeEndpoint: "/api/knowledge/api/v1/chat/retrieval-scopes",
+    labels: { "en-US": "Knowledge Base", "zh-CN": "知识库" },
+    allLabel: { "en-US": "All knowledge bases", "zh-CN": "全部知识库" },
+  },
 };
 
 describe("parseWorkspaceApps", () => {
@@ -22,5 +27,21 @@ describe("parseWorkspaceApps", () => {
     expect(
       parseWorkspaceApps(JSON.stringify([knowledgeApp, knowledgeApp])),
     ).toEqual([knowledgeApp]);
+  });
+
+  it("rejects external chat input scope endpoints", () => {
+    expect(
+      parseWorkspaceApps(
+        JSON.stringify([
+          {
+            ...knowledgeApp,
+            chatInput: {
+              ...knowledgeApp.chatInput,
+              scopeEndpoint: "https://example.com/scopes",
+            },
+          },
+        ]),
+      ),
+    ).toEqual([]);
   });
 });

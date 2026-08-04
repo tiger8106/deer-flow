@@ -12,6 +12,19 @@ const workspaceAppSchema = z
       "zh-CN": z.string().min(1),
     }),
     icon: z.string().regex(/^[a-z0-9-]+$/),
+    chatInput: z
+      .object({
+        scopeEndpoint: z.string().regex(/^\/(?!\/)/),
+        labels: z.object({
+          "en-US": z.string().min(1),
+          "zh-CN": z.string().min(1),
+        }),
+        allLabel: z.object({
+          "en-US": z.string().min(1),
+          "zh-CN": z.string().min(1),
+        }),
+      })
+      .optional(),
   })
   .refine((app) => app.href === `/workspace/${app.id}`, {
     message: "Workspace app href must match its id",

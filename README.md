@@ -141,6 +141,11 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    Runtime deployments can also register same-origin iframe applications with
    `DEER_FLOW_WORKSPACE_APPS`; the generic `/workspace/[app_id]` route and
    sidebar consume that JSON without adding application-specific source files.
+   An application may additionally provide `chatInput.scopeEndpoint` plus
+   localized `chatInput.labels` and `chatInput.allLabel` values. The composer then renders a generic
+   scope tree and forwards the active selection as opaque, run-scoped
+   `context.extensions[app_id]` data; the application remains responsible for
+   authorization, scope semantics, and tool behavior.
 
    <details>
    <summary>Manual model configuration examples</summary>

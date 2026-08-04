@@ -892,6 +892,12 @@ resolves them with the shared reflection helper and passes the instances to
 business package directly. Add loader tests under `backend/tests/` for changes
 to this contract.
 
+Browser composer applications may send opaque per-run selections through
+`body.context.extensions`. The Gateway forwards this mapping to
+`runtime.context` only (never checkpointed `configurable`); external middleware
+and tools own its schema, authorization, and interpretation. DeerFlow must not
+branch on an application-specific extension id.
+
 - Uses `ruff` for linting and formatting
 - Line length: 240 characters
 - Python 3.12+ with type hints

@@ -98,6 +98,10 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   server layout. `core/workspace-apps` validates it, `/workspace/[app_id]`
   renders the iframe, and the sidebar renders its configured entries. DeerFlow
   source must not add an application-specific route, label, or icon branch.
+  Optional `chatInput` configuration exposes a generic composer scope picker;
+  its endpoint returns generic collection/document nodes and its selection is
+  sent as opaque run-scoped `context.extensions[app_id]` data. Authorization and
+  interpretation stay in the external application.
 
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns composer busy-state wiring.
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns branch-from-turn submission and navigation; sidecar `MessageList` instances do not receive the branch action.
