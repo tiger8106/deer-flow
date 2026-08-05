@@ -11,16 +11,19 @@ export type QuotaStatus = {
 
 export const myQuotaQueryKey = ["access-control", "my-quota"] as const;
 
-export function shouldShowQuotaRemaining(
+export function buildQuotaPlaceholder(
   status: QuotaStatus | undefined,
   systemRole: "admin" | "user" | undefined,
-  inputValue: string,
-): boolean {
-  return (
-    systemRole === "user" &&
-    status?.quota_enabled === true &&
-    inputValue.length === 0
-  );
+  placeholder: string,
+  quotaRemaining: string,
+  quotaUnlimited: string,
+): string {
+  if (systemRole !== "user" || status?.quota_enabled !== true) {
+    return placeholder;
+  }
+  const remaining =
+    status.remaining === null ? quotaUnlimited : String(status.remaining);
+  return `${placeholder}（${quotaRemaining.replace("{count}", remaining)}）`;
 }
 
 export function isQuotaExhausted(status: QuotaStatus | undefined): boolean {

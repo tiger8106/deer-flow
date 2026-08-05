@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@rstest/core";
 
 import {
+  buildQuotaPlaceholder,
   decrementQuota,
   isQuotaExhausted,
-  shouldShowQuotaRemaining,
   type QuotaStatus,
 } from "@/core/access-control/quota";
 
@@ -15,17 +15,34 @@ const limited: QuotaStatus = {
 };
 
 describe("quota status", () => {
-  it("shows remaining quota only for an empty regular-user composer", () => {
-    expect(shouldShowQuotaRemaining(limited, "user", "")).toBe(true);
-    expect(shouldShowQuotaRemaining(limited, "user", "question")).toBe(false);
-    expect(shouldShowQuotaRemaining(limited, "admin", "")).toBe(false);
+  it("appends a regular user's remaining quota to the placeholder", () => {
     expect(
-      shouldShowQuotaRemaining(
-        { ...limited, quota_enabled: false },
+      buildQuotaPlaceholder(
+        limited,
         "user",
-        "",
+        "How can I help?",
+        "Questions remaining: {count}",
+        "Unlimited",
       ),
-    ).toBe(false);
+    ).toBe("How can I help?（Questions remaining: 1）");
+    expect(
+      buildQuotaPlaceholder(
+        limited,
+        "admin",
+        "How can I help?",
+        "Questions remaining: {count}",
+        "Unlimited",
+      ),
+    ).toBe("How can I help?");
+    expect(
+      buildQuotaPlaceholder(
+        { ...limited, remaining: null },
+        "user",
+        "How can I help?",
+        "Questions remaining: {count}",
+        "Unlimited",
+      ),
+    ).toBe("How can I help?（Questions remaining: Unlimited）");
   });
 
   it("blocks immediately only when an enabled quota is exhausted", () => {

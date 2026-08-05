@@ -67,8 +67,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
+  buildQuotaPlaceholder,
   isQuotaExhausted,
-  shouldShowQuotaRemaining,
   useMyQuota,
 } from "@/core/access-control/quota";
 import { fetch } from "@/core/api/fetcher";
@@ -333,6 +333,13 @@ export function InputBox({
   const { locale, t } = useI18n();
   const { user } = useAuth();
   const quota = useMyQuota(user?.system_role === "user");
+  const inputPlaceholder = buildQuotaPlaceholder(
+    quota.data,
+    user?.system_role,
+    t.inputBox.placeholder,
+    t.inputBox.quotaRemaining,
+    t.inputBox.quotaUnlimited,
+  );
   const workspaceApps = useWorkspaceApps();
   const chatInputApps = workspaceApps.filter((app) => app.chatInput);
   const queryClient = useQueryClient();
@@ -1976,25 +1983,7 @@ export function InputBox({
             />
           )}
         </PromptInputHeader>
-        <div className="relative min-h-16 w-full min-w-0 px-3 py-3">
-          {shouldShowQuotaRemaining(
-            quota.data,
-            user?.system_role,
-            textInput.value,
-          ) && (
-            <span
-              className="text-muted-foreground pointer-events-none absolute top-3 right-3 text-sm leading-6 tabular-nums"
-              aria-live="polite"
-              data-testid="quota-remaining"
-            >
-              {t.inputBox.quotaRemaining.replace(
-                "{count}",
-                quota.data!.remaining === null
-                  ? t.inputBox.quotaUnlimited
-                  : String(quota.data!.remaining),
-              )}
-            </span>
-          )}
+        <div className="min-h-16 w-full min-w-0 px-3 py-3">
           {selectedSlashSkill ? (
             <div
               className="max-h-48 min-h-6 w-full min-w-0 cursor-text overflow-y-auto text-base leading-6 break-all whitespace-pre-wrap md:text-sm"
@@ -2014,7 +2003,9 @@ export function InputBox({
                 aria-multiline="true"
                 contentEditable={!composerLocked}
                 data-empty={textInput.value.length === 0}
-                data-placeholder={t.inputBox.placeholder}
+                data-placeholder={
+                  textInput.value.length === 0 ? inputPlaceholder : ""
+                }
                 data-slot="input-group-control"
                 onBlur={() => setTextareaFocused(false)}
                 onCompositionEnd={() => {
@@ -2027,7 +2018,7 @@ export function InputBox({
                 onInput={handleInlineSkillInput}
                 onKeyDown={handleInlineSkillKeyDown}
                 onPaste={handleInlineSkillPaste}
-                aria-placeholder={t.inputBox.placeholder}
+                aria-placeholder={inputPlaceholder}
                 ref={inlineSkillTextRef}
                 role="textbox"
                 suppressContentEditableWarning
@@ -2044,7 +2035,7 @@ export function InputBox({
             <PromptInputTextarea
               className="min-h-6! w-full min-w-0 p-0! leading-6!"
               disabled={composerLocked}
-              placeholder={t.inputBox.placeholder}
+              placeholder={inputPlaceholder}
               autoFocus={autoFocus}
               defaultValue={initialValue}
               onBlur={() => setTextareaFocused(false)}
