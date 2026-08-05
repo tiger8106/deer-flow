@@ -97,6 +97,10 @@ export interface Translations {
   inputBox: {
     placeholder: string;
     quotaRemaining: string;
+    quotaPeriodDay: string;
+    quotaPeriodWeek: string;
+    quotaPeriodMonth: string;
+    quotaPeriodYear: string;
     quotaUnlimited: string;
     quotaExhausted: string;
     createSkillPrompt: string;

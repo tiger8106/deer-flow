@@ -113,9 +113,14 @@ export const enUS: Translations = {
   // Input Box
   inputBox: {
     placeholder: "How can I assist you today?",
-    quotaRemaining: "Questions remaining: {count}",
+    quotaRemaining: "{period} questions remaining: {count}",
+    quotaPeriodDay: "Today",
+    quotaPeriodWeek: "This week",
+    quotaPeriodMonth: "This month",
+    quotaPeriodYear: "This year",
     quotaUnlimited: "Unlimited",
-    quotaExhausted: "Your question quota is exhausted. Contact an administrator.",
+    quotaExhausted:
+      "Your question quota is exhausted. Contact an administrator.",
     createSkillPrompt:
       "We're going to build a new skill step by step with `skill-creator`. To start, what do you want this skill to do?",
     addAttachments: "Add attachments",

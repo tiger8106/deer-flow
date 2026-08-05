@@ -21,17 +21,29 @@ describe("quota status", () => {
         limited,
         "user",
         "How can I help?",
-        "Questions remaining: {count}",
+        "{period} questions remaining: {count}",
         "Unlimited",
+        {
+          day: "Today",
+          week: "This week",
+          month: "This month",
+          year: "This year",
+        },
       ),
-    ).toBe("How can I help?（Questions remaining: 1）");
+    ).toBe("How can I help?（This week questions remaining: 1）");
     expect(
       buildQuotaPlaceholder(
         limited,
         "admin",
         "How can I help?",
-        "Questions remaining: {count}",
+        "{period} questions remaining: {count}",
         "Unlimited",
+        {
+          day: "Today",
+          week: "This week",
+          month: "This month",
+          year: "This year",
+        },
       ),
     ).toBe("How can I help?");
     expect(
@@ -39,10 +51,34 @@ describe("quota status", () => {
         { ...limited, remaining: null },
         "user",
         "How can I help?",
-        "Questions remaining: {count}",
+        "{period} questions remaining: {count}",
         "Unlimited",
+        {
+          day: "Today",
+          week: "This week",
+          month: "This month",
+          year: "This year",
+        },
       ),
-    ).toBe("How can I help?（Questions remaining: Unlimited）");
+    ).toBe("How can I help?（This week questions remaining: Unlimited）");
+  });
+
+  it.each([
+    ["day", "本日"],
+    ["week", "本周"],
+    ["month", "本月"],
+    ["year", "本年"],
+  ] as const)("uses the authorized %s period label", (quotaPeriod, label) => {
+    expect(
+      buildQuotaPlaceholder(
+        { ...limited, quota_period: quotaPeriod },
+        "user",
+        "今天我能为你做些什么？",
+        "{period}剩余问答次数：{count}",
+        "不限",
+        { day: "本日", week: "本周", month: "本月", year: "本年" },
+      ),
+    ).toBe(`今天我能为你做些什么？（${label}剩余问答次数：1）`);
   });
 
   it("blocks immediately only when an enabled quota is exhausted", () => {

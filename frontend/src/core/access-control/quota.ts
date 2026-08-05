@@ -17,13 +17,17 @@ export function buildQuotaPlaceholder(
   placeholder: string,
   quotaRemaining: string,
   quotaUnlimited: string,
+  quotaPeriodLabels: Record<QuotaStatus["quota_period"], string>,
 ): string {
   if (systemRole !== "user" || status?.quota_enabled !== true) {
     return placeholder;
   }
   const remaining =
     status.remaining === null ? quotaUnlimited : String(status.remaining);
-  return `${placeholder}（${quotaRemaining.replace("{count}", remaining)}）`;
+  const remainingLabel = quotaRemaining
+    .replace("{period}", quotaPeriodLabels[status.quota_period])
+    .replace("{count}", remaining);
+  return `${placeholder}（${remainingLabel}）`;
 }
 
 export function isQuotaExhausted(status: QuotaStatus | undefined): boolean {

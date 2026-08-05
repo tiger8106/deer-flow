@@ -112,7 +112,11 @@ export const zhCN: Translations = {
   // Input Box
   inputBox: {
     placeholder: "今天我能为你做些什么？",
-    quotaRemaining: "剩余问答次数：{count}",
+    quotaRemaining: "{period}剩余问答次数：{count}",
+    quotaPeriodDay: "本日",
+    quotaPeriodWeek: "本周",
+    quotaPeriodMonth: "本月",
+    quotaPeriodYear: "本年",
     quotaUnlimited: "不限",
     quotaExhausted: "问答额度已用完，请联系管理员",
     createSkillPrompt:

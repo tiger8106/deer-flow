@@ -339,6 +339,12 @@ export function InputBox({
     t.inputBox.placeholder,
     t.inputBox.quotaRemaining,
     t.inputBox.quotaUnlimited,
+    {
+      day: t.inputBox.quotaPeriodDay,
+      week: t.inputBox.quotaPeriodWeek,
+      month: t.inputBox.quotaPeriodMonth,
+      year: t.inputBox.quotaPeriodYear,
+    },
   );
   const workspaceApps = useWorkspaceApps();
   const chatInputApps = workspaceApps.filter((app) => app.chatInput);
