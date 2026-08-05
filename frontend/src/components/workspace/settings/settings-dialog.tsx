@@ -92,17 +92,17 @@ export function SettingsDialog(props: SettingsDialogProps) {
       onOpenChange={(open) => props.onOpenChange?.(open)}
     >
       <DialogContent
-        className="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-5xl md:max-w-6xl"
+        className="top-0 left-0 flex h-dvh w-screen max-h-none max-w-none translate-x-0 translate-y-0 flex-col rounded-none border-0 p-6 sm:max-w-none md:p-8"
         aria-describedby={undefined}
       >
         <DialogHeader className="gap-1">
-          <DialogTitle>{t.settings.title}</DialogTitle>
-          <p className="text-muted-foreground text-sm">
+          <DialogTitle className="text-2xl">{t.settings.title}</DialogTitle>
+          <p className="text-muted-foreground text-base">
             {t.settings.description}
           </p>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
+        <div className="grid min-h-0 flex-1 gap-6 md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)]">
+          <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-xl border p-3">
             <ul className="space-y-1 pr-1">
               {sections.map(({ id, label, icon: Icon }) => {
                 const active = activeSection === id;
@@ -112,13 +112,13 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       type="button"
                       onClick={() => setActiveSection(id as SettingsSection)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors",
                         active
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
-                      <Icon className="size-4" />
+                      <Icon className="size-5" />
                       <span>{label}</span>
                     </button>
                   </li>
@@ -127,7 +127,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             </ul>
           </nav>
           <ScrollArea className="h-full min-h-0 rounded-lg border">
-            <div className="space-y-8 p-6">
+            <div className="space-y-8 p-6 lg:p-8">
               {activeSection === "account" && <AccountSettingsPage />}
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}

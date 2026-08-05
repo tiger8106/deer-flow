@@ -90,7 +90,7 @@ export function WorkspaceNavMenu({
         }}
       >
         <DialogContent
-          className="h-[75vh] max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-5xl md:max-w-6xl"
+          className="top-0 left-0 h-dvh w-screen max-h-none max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none"
           aria-describedby={undefined}
         >
           <DialogTitle className="sr-only">

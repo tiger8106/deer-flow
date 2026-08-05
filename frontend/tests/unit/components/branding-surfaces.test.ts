@@ -41,12 +41,22 @@ test("workspace menus do not expose upstream links, channels, or about", () => {
   expect(nav).not.toContain("contactUs");
 });
 
-test("settings-menu workspace apps open in a settings-sized dialog", () => {
+test("settings and settings-menu apps fill the available viewport", () => {
   const nav = source("src/components/workspace/workspace-nav-menu.tsx");
+  const settings = source(
+    "src/components/workspace/settings/settings-dialog.tsx",
+  );
 
   expect(nav).toContain("setDialogApp(app)");
-  expect(nav).toContain("h-[75vh]");
-  expect(nav).toContain("sm:max-w-5xl md:max-w-6xl");
+  for (const dialog of [nav, settings]) {
+    expect(dialog).toContain("h-dvh w-screen");
+    expect(dialog).toContain("max-w-none");
+    expect(dialog).toContain("rounded-none border-0");
+    expect(dialog).not.toContain("h-[75vh]");
+    expect(dialog).not.toContain("100vh-2rem");
+  }
+  expect(settings).toContain('className="text-2xl"');
+  expect(settings).toContain("md:grid-cols-[260px_minmax(0,1fr)]");
   expect(nav).toContain("src={dialogApp.embedUrl}");
   expect(nav).not.toContain("router.push(app.href)");
 });

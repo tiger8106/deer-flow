@@ -108,8 +108,8 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   renders the iframe, and the sidebar renders its configured entries. Apps may
   use `placement: "settings-menu"` instead of the default sidebar and may set
   `requiredSystemRole` to gate both the navigation entry and server-rendered
-  iframe route. Settings-menu apps open in the same 75vh/max-6xl dialog frame
-  as DeerFlow settings; their own frontend owns the internal left navigation
+  iframe route. Settings-menu apps open in the same borderless, viewport-filling
+  dialog as DeerFlow settings. Their own frontend owns the internal left navigation
   and right content layout. The external application's APIs must still enforce their own
   authorization. DeerFlow
   source must not add an application-specific route, label, or icon branch.
