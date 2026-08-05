@@ -66,7 +66,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { isQuotaExhausted, useMyQuota } from "@/core/access-control/quota";
+import {
+  isQuotaExhausted,
+  shouldShowQuotaRemaining,
+  useMyQuota,
+} from "@/core/access-control/quota";
 import { fetch } from "@/core/api/fetcher";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { getBackendBaseURL } from "@/core/config";
@@ -962,7 +966,7 @@ export function InputBox({
     async (message: PromptInputMessage) => {
       const currentQuota =
         user?.system_role === "user"
-          ? (await quota.refetch()).data ?? quota.data
+          ? ((await quota.refetch()).data ?? quota.data)
           : undefined;
       if (isQuotaExhausted(currentQuota)) {
         toast.error(t.inputBox.quotaExhausted);
@@ -1972,7 +1976,25 @@ export function InputBox({
             />
           )}
         </PromptInputHeader>
-        <div className="min-h-16 w-full min-w-0 px-3 py-3">
+        <div className="relative min-h-16 w-full min-w-0 px-3 py-3">
+          {shouldShowQuotaRemaining(
+            quota.data,
+            user?.system_role,
+            textInput.value,
+          ) && (
+            <span
+              className="text-muted-foreground pointer-events-none absolute top-3 right-3 text-sm leading-6 tabular-nums"
+              aria-live="polite"
+              data-testid="quota-remaining"
+            >
+              {t.inputBox.quotaRemaining.replace(
+                "{count}",
+                quota.data!.remaining === null
+                  ? t.inputBox.quotaUnlimited
+                  : String(quota.data!.remaining),
+              )}
+            </span>
+          )}
           {selectedSlashSkill ? (
             <div
               className="max-h-48 min-h-6 w-full min-w-0 cursor-text overflow-y-auto text-base leading-6 break-all whitespace-pre-wrap md:text-sm"
@@ -2035,19 +2057,6 @@ export function InputBox({
         </div>
         <PromptInputFooter className="flex flex-wrap gap-2 sm:flex-nowrap">
           <PromptInputTools className="min-w-0 flex-1 flex-wrap">
-            {quota.data?.quota_enabled && (
-              <span
-                className="text-muted-foreground px-1 text-xs tabular-nums"
-                aria-live="polite"
-              >
-                {t.inputBox.quotaRemaining.replace(
-                  "{count}",
-                  quota.data.remaining === null
-                    ? t.inputBox.quotaUnlimited
-                    : String(quota.data.remaining),
-                )}
-              </span>
-            )}
             {/* TODO: Add more connectors here
           <PromptInputActionMenu>
             <PromptInputActionMenuTrigger className="px-2!" />
