@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
+import { myQuotaQueryKey } from "../access-control/quota";
 import { getAPIClient } from "../api";
 import { getErrorDisplayMessage } from "../api/error-message";
 import { fetch } from "../api/fetcher";
@@ -1057,6 +1058,7 @@ export function useThreadStream({
           queryKey: threadTokenUsageQueryKey(threadIdRef.current),
         });
       }
+      void queryClient.invalidateQueries({ queryKey: myQuotaQueryKey });
     },
     onFinish(state) {
       listeners.current.onFinish?.(state.values);
@@ -1066,6 +1068,7 @@ export function useThreadStream({
           .filter((id): id is string => Boolean(id)),
       );
       invalidateStoppedThreadCaches(queryClient, threadIdRef.current, isMock);
+      void queryClient.invalidateQueries({ queryKey: myQuotaQueryKey });
     },
   });
 

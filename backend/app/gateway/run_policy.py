@@ -90,7 +90,7 @@ class RemoteRunPolicyClient:
         thread_id: str,
         user: Any,
     ) -> RunAdmission:
-        if not self.enabled or getattr(user, "system_role", None) == "admin":
+        if not self.enabled:
             return RunAdmission()
         request_kind = classify_run_request(body)
         if request_kind == "scheduled":
@@ -118,7 +118,9 @@ class RemoteRunPolicyClient:
                 status_code=429,
                 detail={
                     "code": data.get("reason") or "run_policy_denied",
-                    "message": "今日问答次数已用完" if data.get("reason") == "quota_exhausted" else "当前账号不可发起问答",
+                    "message": "问答额度已用完，请联系管理员"
+                    if data.get("reason") == "quota_exhausted"
+                    else "当前账号不可发起问答",
                     "limit": data.get("limit"),
                     "consumed": data.get("consumed", 0),
                     "reserved": data.get("reserved", 0),
@@ -126,8 +128,6 @@ class RemoteRunPolicyClient:
                     "reset_at": data.get("reset_at"),
                 },
             )
-        if data.get("bypassed"):
-            return RunAdmission()
         return RunAdmission(admission_id=str(data.get("admission_id") or admission_id))
 
     async def bind(self, admission: RunAdmission, run_id: str) -> None:
@@ -163,6 +163,7 @@ class RemoteRunPolicyClient:
             # counts once regardless of internal retries, tool calls, goals, or
             # subagents; regenerate is admitted as its own top-level run.
             "has_response": record.status == RunStatus.success and bool(record.last_ai_message),
+            "total_tokens": record.total_tokens,
         }
         for attempt in range(3):
             try:

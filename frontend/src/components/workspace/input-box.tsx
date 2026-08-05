@@ -66,7 +66,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { isQuotaExhausted, useMyQuota } from "@/core/access-control/quota";
 import { fetch } from "@/core/api/fetcher";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { polishInputDraft } from "@/core/input-polish/api";
@@ -325,6 +327,8 @@ export function InputBox({
   onStop?: () => void;
 }) {
   const { locale, t } = useI18n();
+  const { user } = useAuth();
+  const quota = useMyQuota(user?.system_role === "user");
   const workspaceApps = useWorkspaceApps();
   const chatInputApps = workspaceApps.filter((app) => app.chatInput);
   const queryClient = useQueryClient();
@@ -914,7 +918,10 @@ export function InputBox({
                 : undefined,
             }
           : undefined;
-      const submit = () => onSubmit?.(message, submitOptions);
+      const submit = () => {
+        quota.consumeOptimistically();
+        return onSubmit?.(message, submitOptions);
+      };
 
       // Guard against submitting before the initial model auto-selection
       // effect has flushed thread settings to storage/state.
@@ -947,11 +954,20 @@ export function InputBox({
       sidecar,
       t.inputBox.suggestionPlaceholderRequired,
       uploadLimits,
+      quota,
     ],
   );
 
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
+      const currentQuota =
+        user?.system_role === "user"
+          ? (await quota.refetch()).data ?? quota.data
+          : undefined;
+      if (isQuotaExhausted(currentQuota)) {
+        toast.error(t.inputBox.quotaExhausted);
+        return Promise.reject(new Error("quota_exhausted"));
+      }
       if (status === "streaming") {
         toast.info(t.inputBox.pleaseWaitStreaming);
         return Promise.reject(new Error("streaming"));
@@ -1009,6 +1025,9 @@ export function InputBox({
       status,
       submitThreadMessage,
       t.inputBox.pleaseWaitStreaming,
+      t.inputBox.quotaExhausted,
+      quota,
+      user?.system_role,
     ],
   );
 
@@ -2016,6 +2035,19 @@ export function InputBox({
         </div>
         <PromptInputFooter className="flex flex-wrap gap-2 sm:flex-nowrap">
           <PromptInputTools className="min-w-0 flex-1 flex-wrap">
+            {quota.data?.quota_enabled && (
+              <span
+                className="text-muted-foreground px-1 text-xs tabular-nums"
+                aria-live="polite"
+              >
+                {t.inputBox.quotaRemaining.replace(
+                  "{count}",
+                  quota.data.remaining === null
+                    ? t.inputBox.quotaUnlimited
+                    : String(quota.data.remaining),
+                )}
+              </span>
+            )}
             {/* TODO: Add more connectors here
           <PromptInputActionMenu>
             <PromptInputActionMenuTrigger className="px-2!" />

@@ -96,6 +96,9 @@ export interface Translations {
   // Input Box
   inputBox: {
     placeholder: string;
+    quotaRemaining: string;
+    quotaUnlimited: string;
+    quotaExhausted: string;
     createSkillPrompt: string;
     addAttachments: string;
     inputPolish: string;

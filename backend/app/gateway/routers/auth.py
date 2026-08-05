@@ -56,6 +56,7 @@ class UserDirectoryEntry(BaseModel):
 
     id: str
     email: str
+    system_role: str
 
 
 _REGISTER_LOCK = asyncio.Lock()
@@ -442,7 +443,9 @@ async def resolve_user(email: EmailStr, request: Request):
     user = await get_local_provider().get_user_by_email(str(email))
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserDirectoryEntry(id=str(user.id), email=user.email)
+    return UserDirectoryEntry(
+        id=str(user.id), email=user.email, system_role=user.system_role
+    )
 
 
 @router.get("/users", response_model=list[UserDirectoryEntry])
@@ -451,7 +454,12 @@ async def list_directory_users(request: Request):
     current = await get_current_user_from_request(request)
     if current.system_role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
-    return [UserDirectoryEntry(id=str(user.id), email=user.email) for user in await get_local_provider().list_users()]
+    return [
+        UserDirectoryEntry(
+            id=str(user.id), email=user.email, system_role=user.system_role
+        )
+        for user in await get_local_provider().list_users()
+    ]
 
 
 @router.get("/users/{user_id}", response_model=UserDirectoryEntry)
@@ -461,7 +469,9 @@ async def get_directory_user(user_id: str, request: Request):
     user = await get_local_provider().get_user(user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserDirectoryEntry(id=str(user.id), email=user.email)
+    return UserDirectoryEntry(
+        id=str(user.id), email=user.email, system_role=user.system_role
+    )
 
 
 # Per-IP cache: ip → (timestamp, result_dict).

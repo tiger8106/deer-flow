@@ -81,17 +81,30 @@ async def test_remote_policy_surfaces_structured_quota_exhaustion():
     assert exc_info.value.status_code == 429
     assert exc_info.value.detail["code"] == "quota_exhausted"
     assert exc_info.value.detail["remaining"] == 0
+    assert exc_info.value.detail["message"] == "问答额度已用完，请联系管理员"
 
 
 @pytest.mark.asyncio
-async def test_admin_and_scheduled_runs_do_not_call_remote_policy():
-    async def unexpected(_: httpx.Request) -> httpx.Response:
-        raise AssertionError("remote policy should not be called")
+async def test_admin_runs_are_tracked_but_scheduled_runs_are_not():
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        payload = __import__("json").loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "allowed": True,
+                "admission_id": payload["admission_id"],
+                "bypassed": True,
+            },
+        )
 
     client = RemoteRunPolicyClient(
         "http://policy.test",
         "token",
-        transport=httpx.MockTransport(unexpected),
+        transport=httpx.MockTransport(handler),
     )
     admin = await client.admit(
         body=_body(),
@@ -103,8 +116,9 @@ async def test_admin_and_scheduled_runs_do_not_call_remote_policy():
         thread_id="thread-1",
         user=SimpleNamespace(id="user", email="user@test.com", system_role="user"),
     )
-    assert not admin.reserved
+    assert admin.reserved
     assert not scheduled.reserved
+    assert calls == 1
 
 
 @pytest.mark.asyncio
@@ -139,8 +153,10 @@ async def test_completion_only_counts_a_successful_user_visible_reply(
         status=status,
         on_disconnect=DisconnectMode.continue_,
         last_ai_message=last_ai_message,
+        total_tokens=123,
     )
 
     await client.complete(record)
 
     assert captured["has_response"] is expected_has_response
+    assert captured["total_tokens"] == 123
