@@ -2074,7 +2074,7 @@ export function InputBox({
               supported={voiceInputSupported}
               onToggle={toggleVoiceInput}
             />
-            <Tooltip
+            {user?.system_role === "admin" && <><Tooltip
               content={
                 polishingInput
                   ? t.inputBox.inputPolishing
@@ -2280,7 +2280,7 @@ export function InputBox({
                   </PromptInputActionMenu>
                 </DropdownMenuGroup>
               </PromptInputActionMenuContent>
-            </PromptInputActionMenu>
+            </PromptInputActionMenu></>}
             {chatInputApps.map((app) => (
               <ComposerExtensionPicker
                 key={app.id}
@@ -2477,6 +2477,7 @@ export function InputBox({
       )}
 
       {isWelcomeMode &&
+        user?.system_role === "admin" &&
         searchParams.get("mode") !== "skill" &&
         !selectedSlashSkill &&
         !showSkillSuggestions && (

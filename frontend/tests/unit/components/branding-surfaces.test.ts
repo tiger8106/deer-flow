@@ -41,6 +41,40 @@ test("workspace menus do not expose upstream links, channels, or about", () => {
   expect(nav).not.toContain("contactUs");
 });
 
+test("Tiger gates development menus to super administrators", () => {
+  const sidebar = source(
+    "src/components/workspace/workspace-nav-chat-list.tsx",
+  );
+  const settings = source(
+    "src/components/workspace/settings/settings-dialog.tsx",
+  );
+
+  expect(sidebar).toContain('user?.system_role === "admin"');
+  expect(sidebar).toContain("showDevelopmentEntries &&");
+  expect(sidebar).toContain('href="/workspace/chats"');
+  expect(sidebar).toContain('href="/workspace/agents"');
+  expect(sidebar).toContain('href="/workspace/scheduled-tasks"');
+  expect(settings).toContain('user?.system_role === "admin"');
+  expect(settings).toContain("showDevelopmentSettings");
+  expect(settings).toContain('id: "notification"');
+  expect(settings).toContain('id: "tools"');
+  expect(settings).toContain('id: "skills"');
+});
+
+test("Tiger gates developer composer shortcuts to super administrators", () => {
+  const inputBox = source("src/components/workspace/input-box.tsx");
+
+  expect(inputBox).toContain(
+    'user?.system_role === "admin" && <><Tooltip',
+  );
+  expect(inputBox).toContain(
+    'user?.system_role === "admin" &&\n        searchParams.get("mode")',
+  );
+  expect(inputBox).toContain("<SuggestionList");
+  expect(inputBox).toContain("<PromptInputActionMenu>");
+  expect(inputBox).toContain('data-testid="polish-input-button"');
+});
+
 test("settings and settings-menu apps fill the available viewport", () => {
   const nav = source("src/components/workspace/workspace-nav-menu.tsx");
   const settings = source(

@@ -23,6 +23,7 @@ import { MemorySettingsPage } from "@/components/workspace/settings/memory-setti
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,8 @@ type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
 export function SettingsDialog(props: SettingsDialogProps) {
   const { defaultSection = "appearance", ...dialogProps } = props;
   const { t } = useI18n();
+  const { user } = useAuth();
+  const showDevelopmentSettings = user?.system_role === "admin";
   const [activeSection, setActiveSection] =
     useState<SettingsSection>(defaultSection);
 
@@ -67,25 +70,26 @@ export function SettingsDialog(props: SettingsDialogProps) {
         icon: PaletteIcon,
       },
       {
-        id: "notification",
-        label: t.settings.sections.notification,
-        icon: BellIcon,
-      },
-      {
         id: "memory",
         label: t.settings.sections.memory,
         icon: BrainIcon,
       },
-      { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
-      { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
+      ...(showDevelopmentSettings
+        ? [
+            { id: "notification", label: t.settings.sections.notification, icon: BellIcon },
+            { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
+            { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
+          ]
+        : []),
     ],
     [
       t.settings.sections.account,
       t.settings.sections.appearance,
       t.settings.sections.memory,
-      t.settings.sections.tools,
-      t.settings.sections.skills,
       t.settings.sections.notification,
+      t.settings.sections.skills,
+      t.settings.sections.tools,
+      showDevelopmentSettings,
     ],
   );
   return (
@@ -136,11 +140,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}
-              {activeSection === "skills" && (
-                <SkillSettingsPage
-                  onClose={() => props.onOpenChange?.(false)}
-                />
-              )}
+              {activeSection === "skills" && <SkillSettingsPage onClose={() => props.onOpenChange?.(false)} />}
               {activeSection === "notification" && <NotificationSettingsPage />}
             </div>
           </ScrollArea>
