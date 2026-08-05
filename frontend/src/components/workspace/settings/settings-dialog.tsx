@@ -26,6 +26,8 @@ import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
+import { FullscreenDialogCloseButton } from "../fullscreen-dialog-close-button";
+
 type SettingsSection =
   | "account"
   | "appearance"
@@ -92,12 +94,14 @@ export function SettingsDialog(props: SettingsDialogProps) {
       onOpenChange={(open) => props.onOpenChange?.(open)}
     >
       <DialogContent
-        className="top-0 left-0 flex h-dvh w-screen max-h-none max-w-none translate-x-0 translate-y-0 flex-col rounded-none border-0 p-6 sm:max-w-none md:p-8"
+        className="top-0 left-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col rounded-none border-0 p-6 sm:max-w-none md:p-8"
         aria-describedby={undefined}
+        showCloseButton={false}
       >
+        <FullscreenDialogCloseButton />
         <DialogHeader className="gap-1">
-          <DialogTitle className="text-2xl">{t.settings.title}</DialogTitle>
-          <p className="text-muted-foreground text-base">
+          <DialogTitle className="text-xl">{t.settings.title}</DialogTitle>
+          <p className="text-muted-foreground text-sm">
             {t.settings.description}
           </p>
         </DialogHeader>
@@ -112,7 +116,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       type="button"
                       onClick={() => setActiveSection(id as SettingsSection)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors",
+                        "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors",
                         active
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",

@@ -1,13 +1,9 @@
 "use client";
 
 import { ChevronsUpDown, Settings2Icon, SettingsIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +25,7 @@ import {
   type WorkspaceApp,
 } from "@/core/workspace-apps/types";
 
+import { FullscreenDialogCloseButton } from "./fullscreen-dialog-close-button";
 import { SettingsDialog } from "./settings";
 import { WorkspaceAppIcon } from "./workspace-app-icon";
 
@@ -63,6 +60,7 @@ export function WorkspaceNavMenu({
     "appearance" | "memory" | "tools" | "skills" | "notification"
   >("appearance");
   const [mounted, setMounted] = useState(false);
+  const dialogAppFrameRef = useRef<HTMLIFrameElement>(null);
   const { open: isSidebarOpen } = useSidebar();
   const { locale, t } = useI18n();
   const { user } = useAuth();
@@ -75,6 +73,21 @@ export function WorkspaceNavMenu({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!dialogApp) return;
+    function closeWorkspaceApp(event: MessageEvent) {
+      if (
+        event.origin === window.location.origin &&
+        event.source === dialogAppFrameRef.current?.contentWindow &&
+        event.data?.type === "deerflow:workspace-app:close"
+      ) {
+        setDialogApp(null);
+      }
+    }
+    window.addEventListener("message", closeWorkspaceApp);
+    return () => window.removeEventListener("message", closeWorkspaceApp);
+  }, [dialogApp]);
 
   return (
     <>
@@ -90,14 +103,17 @@ export function WorkspaceNavMenu({
         }}
       >
         <DialogContent
-          className="top-0 left-0 h-dvh w-screen max-h-none max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none"
+          className="top-0 left-0 h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none"
           aria-describedby={undefined}
+          showCloseButton={false}
         >
+          <FullscreenDialogCloseButton />
           <DialogTitle className="sr-only">
             {dialogApp ? getWorkspaceAppLabel(dialogApp, locale) : ""}
           </DialogTitle>
           {dialogApp && (
             <iframe
+              ref={dialogAppFrameRef}
               className="size-full min-h-0 border-0"
               src={dialogApp.embedUrl}
               title={getWorkspaceAppLabel(dialogApp, locale)}
