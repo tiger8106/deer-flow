@@ -8,7 +8,7 @@ import {
   FolderIcon,
   Loader2Icon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PromptInputButton } from "@/components/ai-elements/prompt-input";
 import {
@@ -63,6 +63,9 @@ export function ComposerExtensionPicker({
   const [expandedScopeGroups, setExpandedScopeGroups] = useState<Set<string>>(
     new Set(),
   );
+  const nodeLabelClickTimers = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
   const config = app.chatInput;
   const appLabel = getWorkspaceAppChatInputLabel(app, locale);
   const allLabel = getWorkspaceAppAllScopeLabel(app, locale);
@@ -113,6 +116,13 @@ export function ComposerExtensionPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length, open]);
 
+  useEffect(() => {
+    const timers = nodeLabelClickTimers.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
   if (!config) return null;
 
   const toggleExpanded = (
@@ -125,6 +135,49 @@ export function ComposerExtensionPicker({
       else next.add(id);
       return next;
     });
+  };
+
+  const nodeLabelKey = (node: ComposerScopeNode) =>
+    `${node.kind}:${node.id}`;
+
+  const cancelPendingNodeLabelClick = (node: ComposerScopeNode) => {
+    const key = nodeLabelKey(node);
+    const timer = nodeLabelClickTimers.current.get(key);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    nodeLabelClickTimers.current.delete(key);
+  };
+
+  const handleNodeLabelClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    node: ComposerScopeNode,
+    hasFolderChildren: boolean,
+  ) => {
+    if (
+      event.detail !== 1 ||
+      node.kind !== "collection" ||
+      !hasFolderChildren
+    ) {
+      return;
+    }
+    const key = nodeLabelKey(node);
+    cancelPendingNodeLabelClick(node);
+    // 浏览器会先派发双击中的两次 click，延迟单击动作以避免两种交互互相触发。
+    const timer = setTimeout(() => {
+      toggleExpanded(setExpandedFolders, node.id);
+      nodeLabelClickTimers.current.delete(key);
+    }, 250);
+    nodeLabelClickTimers.current.set(key, timer);
+  };
+
+  const handleNodeLabelDoubleClick = (
+    node: ComposerScopeNode,
+    hasDocumentChildren: boolean,
+  ) => {
+    cancelPendingNodeLabelClick(node);
+    if (node.kind === "collection" && hasDocumentChildren) {
+      toggleExpanded(setExpandedDocuments, node.id);
+    }
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -191,6 +244,7 @@ export function ComposerExtensionPicker({
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              cancelPendingNodeLabelClick(node);
               if (isCollection && folderChildren.length > 0) {
                 toggleExpanded(setExpandedFolders, node.id);
               }
@@ -215,16 +269,12 @@ export function ComposerExtensionPicker({
             type="button"
             className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
             title={node.label}
-            onClick={() => {
-              if (isCollection && folderChildren.length > 0) {
-                toggleExpanded(setExpandedFolders, node.id);
-              }
-            }}
-            onDoubleClick={() => {
-              if (isCollection && documentChildren.length > 0) {
-                toggleExpanded(setExpandedDocuments, node.id);
-              }
-            }}
+            onClick={(event) =>
+              handleNodeLabelClick(event, node, folderChildren.length > 0)
+            }
+            onDoubleClick={() =>
+              handleNodeLabelDoubleClick(node, documentChildren.length > 0)
+            }
           >
             {isCollection ? (
               <FolderIcon className="size-4 shrink-0" />
