@@ -10,6 +10,7 @@ export const composerScopeNodeSchema: z.ZodType<ComposerScopeNode> = z.lazy(
         .object({
           id: z.string().min(1).max(100),
           label: z.string().min(1).max(200),
+          order: z.number().int().optional(),
         })
         .optional(),
       children: z.array(composerScopeNodeSchema),
@@ -32,6 +33,7 @@ export type ComposerScopeNode = {
   group?: {
     id: string;
     label: string;
+    order?: number;
   };
   children: ComposerScopeNode[];
 };
@@ -39,6 +41,7 @@ export type ComposerScopeNode = {
 export type ComposerScopeGroup = {
   id: string;
   label: string;
+  order?: number;
   nodes: ComposerScopeNode[];
 };
 
@@ -105,10 +108,15 @@ export function groupComposerScopeNodes(
     groups.set(id, {
       id,
       label: node.group?.label ?? "",
+      order: node.group?.order,
       nodes: [node],
     });
   }
-  return [...groups.values()];
+  return [...groups.values()].sort(
+    (left, right) =>
+      (left.order ?? Number.MAX_SAFE_INTEGER) -
+      (right.order ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 export function getComposerScopeGroupState(

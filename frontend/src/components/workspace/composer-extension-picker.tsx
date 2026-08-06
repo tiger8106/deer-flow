@@ -60,6 +60,9 @@ export function ComposerExtensionPicker({
   const [expandedDocuments, setExpandedDocuments] = useState<Set<string>>(
     new Set(),
   );
+  const [expandedScopeGroups, setExpandedScopeGroups] = useState<Set<string>>(
+    new Set(),
+  );
   const config = app.chatInput;
   const appLabel = getWorkspaceAppChatInputLabel(app, locale);
   const allLabel = getWorkspaceAppAllScopeLabel(app, locale);
@@ -125,6 +128,9 @@ export function ComposerExtensionPicker({
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setExpandedScopeGroups(new Set());
+    }
     if (nextOpen && nodes.length > 0) {
       const expansion = getSelectedScopeExpansion(nodes, scopes);
       setExpandedFolders(expansion.folderIds);
@@ -235,9 +241,30 @@ export function ComposerExtensionPicker({
 
   const renderGroup = (group: ComposerScopeGroup) => {
     const groupState = getComposerScopeGroupState(scopes, group.nodes);
+    const expanded = expandedScopeGroups.has(group.id);
     return (
       <div key={`group:${group.id}`} className="border-border/60 border-b pb-1">
-        <label className="bg-muted/40 hover:bg-accent flex min-h-9 w-full items-center gap-2 rounded-sm px-2 text-left text-sm">
+        <div className="bg-muted/40 hover:bg-accent flex min-h-9 w-full items-center gap-1 rounded-sm px-2 text-left text-sm">
+          <button
+            type="button"
+            className="flex size-7 shrink-0 items-center justify-center"
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "收起" : "展开"}${group.label}`}
+            onClick={() =>
+              setExpandedScopeGroups((current) => {
+                const next = new Set(current);
+                if (next.has(group.id)) next.delete(group.id);
+                else next.add(group.id);
+                return next;
+              })
+            }
+          >
+            {expanded ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <ChevronRightIcon className="size-3.5" />
+            )}
+          </button>
           <input
             type="checkbox"
             className="accent-primary size-3.5"
@@ -251,12 +278,28 @@ export function ComposerExtensionPicker({
             }
             onChange={() => toggleScopeGroup(group)}
           />
-          <FolderIcon className="text-muted-foreground size-4" />
-          <span className="flex-1 truncate font-medium">{group.label}</span>
-        </label>
-        <div role="group" className="pt-0.5">
-          {group.nodes.map((node) => renderNode(node, 0))}
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
+            title={group.label}
+            onClick={() =>
+              setExpandedScopeGroups((current) => {
+                const next = new Set(current);
+                if (next.has(group.id)) next.delete(group.id);
+                else next.add(group.id);
+                return next;
+              })
+            }
+          >
+            <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+            <span className="truncate font-medium">{group.label}</span>
+          </button>
         </div>
+        {expanded ? (
+          <div role="group" className="pt-0.5">
+            {group.nodes.map((node) => renderNode(node, 0))}
+          </div>
+        ) : null}
       </div>
     );
   };

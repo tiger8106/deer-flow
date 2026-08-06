@@ -114,13 +114,13 @@ describe("workspace app chat input", () => {
       id: "personal-root",
       label: "个人制度",
       kind: "collection" as const,
-      group: { id: "personal", label: "个人知识库" },
+      group: { id: "personal", label: "个人知识库", order: 0 },
       children: [
         {
           id: "personal-doc",
           label: "个人手册.pdf",
           kind: "document" as const,
-          group: { id: "personal", label: "个人知识库" },
+          group: { id: "personal", label: "个人知识库", order: 0 },
           children: [],
         },
       ],
@@ -129,10 +129,10 @@ describe("workspace app chat input", () => {
       id: "public-root",
       label: "公共制度",
       kind: "collection" as const,
-      group: { id: "public", label: "公共知识库" },
+      group: { id: "public", label: "公共知识库", order: 1 },
       children: [],
     };
-    const nodes = [personalRoot, publicRoot];
+    const nodes = [publicRoot, personalRoot];
     const [personalGroup, publicGroup] = groupComposerScopeNodes(nodes);
 
     expect(personalGroup?.label).toBe("个人知识库");
@@ -157,13 +157,13 @@ describe("workspace app chat input", () => {
         id: "root",
         label: "个人制度",
         kind: "collection" as const,
-        group: { id: "personal", label: "个人知识库" },
+        group: { id: "personal", label: "个人知识库", order: 0 },
         children: [
           {
             id: "doc",
             label: "手册.pdf",
             kind: "document" as const,
-            group: { id: "personal", label: "个人知识库" },
+            group: { id: "personal", label: "个人知识库", order: 0 },
             children: [],
           },
         ],
