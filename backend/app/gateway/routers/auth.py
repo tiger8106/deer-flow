@@ -9,7 +9,7 @@ import time
 import urllib.parse
 from ipaddress import ip_address, ip_network
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from starlette.responses import RedirectResponse
@@ -443,9 +443,26 @@ async def resolve_user(email: EmailStr, request: Request):
     user = await get_local_provider().get_user_by_email(str(email))
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserDirectoryEntry(
-        id=str(user.id), email=user.email, system_role=user.system_role
-    )
+    return UserDirectoryEntry(id=str(user.id), email=user.email, system_role=user.system_role)
+
+
+@router.get("/users/search", response_model=list[UserDirectoryEntry])
+async def search_directory_users(request: Request, query: str = Query("", max_length=100)):
+    """Search minimal account records for authenticated module workflows.
+
+    This deliberately exposes only the same non-sensitive fields as the
+    administrator directory.  External modules such as knowledge access
+    control need a way for a regular resource owner to select another
+    registered account, while the full directory listing remains restricted
+    to administrators.
+    """
+    await get_current_user_from_request(request)
+    normalized = query.strip().casefold()
+    users = await get_local_provider().list_users()
+    if normalized:
+        users = [user for user in users if normalized in f"{user.email} {user.id} {user.system_role}".casefold()]
+    users.sort(key=lambda user: (str(user.email).casefold(), str(user.id)))
+    return [UserDirectoryEntry(id=str(user.id), email=user.email, system_role=user.system_role) for user in (users[:20] if normalized else users)]
 
 
 @router.get("/users", response_model=list[UserDirectoryEntry])
@@ -454,12 +471,7 @@ async def list_directory_users(request: Request):
     current = await get_current_user_from_request(request)
     if current.system_role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
-    return [
-        UserDirectoryEntry(
-            id=str(user.id), email=user.email, system_role=user.system_role
-        )
-        for user in await get_local_provider().list_users()
-    ]
+    return [UserDirectoryEntry(id=str(user.id), email=user.email, system_role=user.system_role) for user in await get_local_provider().list_users()]
 
 
 @router.get("/users/{user_id}", response_model=UserDirectoryEntry)
@@ -469,9 +481,7 @@ async def get_directory_user(user_id: str, request: Request):
     user = await get_local_provider().get_user(user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserDirectoryEntry(
-        id=str(user.id), email=user.email, system_role=user.system_role
-    )
+    return UserDirectoryEntry(id=str(user.id), email=user.email, system_role=user.system_role)
 
 
 # Per-IP cache: ip → (timestamp, result_dict).

@@ -656,8 +656,12 @@ none of the directory routes expose password/provider metadata.
 
 The first account created through local registration is assigned the `admin` system
 role; later accounts are regular users. Administrators can list the same minimal
-directory records through `GET /api/v1/auth/users`, while authenticated resource views
-can resolve a known account ID through `GET /api/v1/auth/users/{user_id}`.
+minimal `{id, email, system_role}` directory records through
+`GET /api/v1/auth/users`. Authenticated external modules can search the same minimal
+records through `GET /api/v1/auth/users/search?query=<text>` (a non-empty
+query returns at most 20 matches), while authenticated resource views can resolve a
+known account ID through `GET /api/v1/auth/users/{user_id}`. These routes never expose
+password or provider metadata.
 
 ### Skills & Tools
 

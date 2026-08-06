@@ -557,7 +557,29 @@ def test_api_authenticated_user_can_resolve_exact_directory_email():
 
     assert response.status_code == 200
     assert response.json()["email"] == "directory-user@test.com"
-    assert set(response.json()) == {"id", "email"}
+    assert set(response.json()) == {"id", "email", "system_role"}
+
+
+def test_authenticated_regular_user_can_search_minimal_directory():
+    _setup_config()
+    admin_client = _get_auth_client()
+    admin = admin_client.post(
+        "/api/v1/auth/register",
+        json={"email": "searchable-admin@test.com", "password": "securepassword123"},
+    ).json()
+    user_client = _get_auth_client()
+    user_client.post(
+        "/api/v1/auth/register",
+        json={"email": "searchable-user@test.com", "password": "securepassword456"},
+    )
+
+    response = user_client.get("/api/v1/auth/users/search", params={"query": "searchable-admin"})
+
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == admin["id"]
+    assert response.json()[0]["email"] == "searchable-admin@test.com"
+    assert "password" not in response.json()[0]
+    assert user_client.get("/api/v1/auth/users/search", params={"query": "missing-account"}).json() == []
 
 
 def test_first_registered_user_is_admin_and_later_user_is_regular():
@@ -594,8 +616,16 @@ def test_admin_can_list_minimal_user_directory_and_regular_user_cannot():
     response = admin_client.get("/api/v1/auth/users")
     assert response.status_code == 200
     assert response.json() == [
-        {"id": admin["id"], "email": "directory-admin@test.com"},
-        {"id": user["id"], "email": "directory-regular@test.com"},
+        {
+            "id": admin["id"],
+            "email": "directory-admin@test.com",
+            "system_role": admin["system_role"],
+        },
+        {
+            "id": user["id"],
+            "email": "directory-regular@test.com",
+            "system_role": user["system_role"],
+        },
     ]
     assert user_client.get("/api/v1/auth/users").status_code == 403
 
@@ -604,6 +634,7 @@ def test_admin_can_list_minimal_user_directory_and_regular_user_cannot():
     assert resolved.json() == {
         "id": admin["id"],
         "email": "directory-admin@test.com",
+        "system_role": admin["system_role"],
     }
 
 
