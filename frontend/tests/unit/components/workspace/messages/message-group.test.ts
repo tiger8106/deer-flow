@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { MessageGroup } from "@/components/workspace/messages/message-group";
 import { I18nContext } from "@/core/i18n/context";
+import { ToolDisplayLabelsProvider } from "@/core/tools/context";
+import type { ToolDisplayLabels } from "@/core/tools/display-labels";
 
 rs.mock("@/components/workspace/artifacts", () => ({
   useArtifacts: () => ({
@@ -61,6 +63,52 @@ describe("MessageGroup", () => {
 
     expect(html).not.toContain("knowledge_query");
     expect(html).toContain("Processing");
+  });
+
+  it("uses configured friendly labels for external tool activity", () => {
+    const html = renderGroup(
+      [
+        {
+          id: "ai-knowledge-tool",
+          type: "ai",
+          content: "",
+          tool_calls: [
+            {
+              id: "call-knowledge-tool",
+              name: "knowledge_query",
+              args: {},
+            },
+          ],
+        },
+        {
+          id: "ai-image-tool",
+          type: "ai",
+          content: "",
+          tool_calls: [
+            {
+              id: "call-image-tool",
+              name: "view_image",
+              args: {},
+            },
+          ],
+        },
+      ] as Message[],
+      {
+        knowledge_query: {
+          "en-US": "Knowledge search",
+          "zh-CN": "知识库查询",
+        },
+        view_image: {
+          "en-US": "Image recognition",
+          "zh-CN": "图片识别",
+        },
+      },
+    );
+
+    expect(html).toContain("Knowledge search");
+    expect(html).toContain("Image recognition");
+    expect(html).not.toContain("knowledge_query");
+    expect(html).not.toContain("view_image");
   });
 
   it("keeps assistant text visible while older tool steps stay collapsed", () => {
@@ -143,7 +191,10 @@ describe("MessageGroup", () => {
   });
 });
 
-function renderGroup(messages: Message[]) {
+function renderGroup(
+  messages: Message[],
+  toolDisplayLabels: ToolDisplayLabels = {},
+) {
   return renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
@@ -153,7 +204,11 @@ function renderGroup(messages: Message[]) {
           setLocale: () => undefined,
         },
       },
-      createElement(MessageGroup, { messages }),
+      createElement(
+        ToolDisplayLabelsProvider,
+        { labels: toolDisplayLabels },
+        createElement(MessageGroup, { messages }),
+      ),
     ),
   );
 }

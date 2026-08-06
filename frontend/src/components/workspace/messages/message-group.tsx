@@ -34,6 +34,8 @@ import {
   findToolCallResult,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
+import { useToolDisplayLabels } from "@/core/tools/context";
+import { resolveToolDisplayLabel } from "@/core/tools/display-labels";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -464,7 +466,8 @@ function ToolCall({
   isLoading?: boolean;
   tokenDebugStep?: TokenDebugStep;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const toolDisplayLabels = useToolDisplayLabels();
   const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
     useArtifacts();
   const tokenLabel = tokenDebugStep
@@ -711,7 +714,15 @@ function ToolCall({
     return (
       <ChainOfThoughtStep
         key={id}
-        label={resolveLabel(description ?? t.toolCalls.useTool(name))}
+        label={resolveLabel(
+          description ??
+            resolveToolDisplayLabel(
+              name,
+              locale,
+              toolDisplayLabels,
+              t.toolCalls.useTool(name),
+            ),
+        )}
         icon={WrenchIcon}
       ></ChainOfThoughtStep>
     );

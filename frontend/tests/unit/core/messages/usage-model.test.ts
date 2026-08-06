@@ -127,6 +127,59 @@ test("uses generic todo labels when backend attribution is absent", () => {
   ]);
 });
 
+test("uses configured friendly labels for generic tool attribution", () => {
+  const messages = [
+    {
+      id: "ai-knowledge-tool",
+      type: "ai",
+      content: "",
+      tool_calls: [
+        {
+          id: "knowledge-query:1",
+          name: "knowledge_query",
+          args: {},
+        },
+      ],
+      usage_metadata: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+    },
+    {
+      id: "ai-image-tool",
+      type: "ai",
+      content: "",
+      tool_calls: [
+        {
+          id: "view-image:1",
+          name: "view_image",
+          args: {},
+        },
+      ],
+      usage_metadata: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+    },
+  ] as Message[];
+
+  expect(
+    buildTokenDebugSteps(messages, enUS, {
+      knowledge_query: {
+        "en-US": "Knowledge search",
+        "zh-CN": "知识库查询",
+      },
+      view_image: {
+        "en-US": "Image recognition",
+        "zh-CN": "图片识别",
+      },
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      messageId: "ai-knowledge-tool",
+      label: "Knowledge search",
+    }),
+    expect.objectContaining({
+      messageId: "ai-image-tool",
+      label: "Image recognition",
+    }),
+  ]);
+});
+
 test("marks multi-action AI steps as shared attribution", () => {
   const messages = [
     {

@@ -30,6 +30,8 @@ import {
   resolveSubtaskModelLabel,
 } from "@/core/tasks/presentation";
 import { stepsForDisplay } from "@/core/tasks/steps";
+import { useToolDisplayLabels } from "@/core/tools/context";
+import { resolveToolDisplayLabel } from "@/core/tools/display-labels";
 import { explainLastToolCall } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +53,8 @@ export function SubtaskCard({
   runId?: string;
   isLoading: boolean;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const toolDisplayLabels = useToolDisplayLabels();
   const [collapsed, setCollapsed] = useState(true);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
   const task = useSubtask(taskId)!;
@@ -175,7 +178,12 @@ export function SubtaskCard({
                       {task.status === "in_progress" &&
                       task.latestMessage &&
                       hasToolCalls(task.latestMessage)
-                        ? explainLastToolCall(task.latestMessage, t)
+                        ? explainLastToolCall(
+                            task.latestMessage,
+                            t,
+                            locale,
+                            toolDisplayLabels,
+                          )
                         : t.subtasks[task.status]}
                     </FlipDisplay>
                   </div>
@@ -219,7 +227,12 @@ export function SubtaskCard({
                 label={
                   step.kind === "tool" ? (
                     step.tool_name
-                      ? t.toolCalls.useTool(step.tool_name)
+                      ? resolveToolDisplayLabel(
+                          step.tool_name,
+                          locale,
+                          toolDisplayLabels,
+                          t.toolCalls.useTool(step.tool_name),
+                        )
                       : t.subtasks[task.status]
                   ) : (
                     <div className="text-muted-foreground line-clamp-3 text-sm">

@@ -1,6 +1,11 @@
 import type { Message } from "@langchain/langgraph-sdk";
 
+import type { Locale } from "@/core/i18n";
 import type { Translations } from "@/core/i18n/locales/types";
+import {
+  resolveToolDisplayLabel,
+  type ToolDisplayLabels,
+} from "@/core/tools/display-labels";
 
 import { getUsageMetadata, type TokenUsage } from "./usage";
 import { hasContent } from "./utils";
@@ -104,6 +109,8 @@ export function tokenUsagePreferencesFromPreset(
 export function buildTokenDebugSteps(
   messages: Message[],
   t: Translations,
+  toolDisplayLabels: ToolDisplayLabels = {},
+  locale: Locale = "en-US",
 ): TokenDebugStep[] {
   const steps: TokenDebugStep[] = [];
 
@@ -117,7 +124,14 @@ export function buildTokenDebugSteps(
     const actionLabels: string[] = [];
 
     if (attribution) {
-      actionLabels.push(...buildActionLabelsFromAttribution(attribution, t));
+      actionLabels.push(
+        ...buildActionLabelsFromAttribution(
+          attribution,
+          t,
+          locale,
+          toolDisplayLabels,
+        ),
+      );
 
       if (actionLabels.length === 0) {
         if (attribution.kind === "final_answer") {
@@ -161,6 +175,8 @@ export function buildTokenDebugSteps(
             args: toolArgs,
           },
           t,
+          locale,
+          toolDisplayLabels,
         ),
       );
     }
@@ -212,15 +228,21 @@ function getTokenUsageAttribution(
 function buildActionLabelsFromAttribution(
   attribution: TokenUsageAttribution,
   t: Translations,
+  locale: Locale,
+  toolDisplayLabels: ToolDisplayLabels,
 ): string[] {
   return (attribution.actions ?? [])
-    .map((action) => describeAttributionAction(action, t))
+    .map((action) =>
+      describeAttributionAction(action, t, locale, toolDisplayLabels),
+    )
     .filter((label): label is string => !!label);
 }
 
 function describeAttributionAction(
   action: TokenUsageAttributionAction,
   t: Translations,
+  locale: Locale,
+  toolDisplayLabels: ToolDisplayLabels,
 ): string | null {
   switch (action.kind) {
     case "todo_start":
@@ -245,7 +267,13 @@ function describeAttributionAction(
       if (action.query) {
         return t.toolCalls.searchFor(action.query);
       }
-      return t.toolCalls.useTool(action.tool_name ?? "search");
+      const toolName = action.tool_name ?? "search";
+      return resolveToolDisplayLabel(
+        toolName,
+        locale,
+        toolDisplayLabels,
+        t.toolCalls.useTool(toolName),
+      );
     case "present_files":
       return t.toolCalls.presentFiles;
     case "clarification":
@@ -257,6 +285,8 @@ function describeAttributionAction(
           args: action.description ? { description: action.description } : {},
         },
         t,
+        locale,
+        toolDisplayLabels,
       );
     default:
       return null;
@@ -269,6 +299,8 @@ function describeToolCall(
     args: Record<string, unknown>;
   },
   t: Translations,
+  locale: Locale,
+  toolDisplayLabels: ToolDisplayLabels,
 ): string {
   if (toolCall.name === "task") {
     const description =
@@ -301,7 +333,12 @@ function describeToolCall(
     return toolCall.args.description;
   }
 
-  return t.toolCalls.useTool(toolCall.name);
+  return resolveToolDisplayLabel(
+    toolCall.name,
+    locale,
+    toolDisplayLabels,
+    t.toolCalls.useTool(toolCall.name),
+  );
 }
 
 function normalizeTokenUsageAttribution(

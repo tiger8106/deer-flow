@@ -128,6 +128,12 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   sent as opaque run-scoped `context.extensions[app_id]` data. Authorization and
   interpretation stay in the external application.
 
+- `DEER_FLOW_TOOL_DISPLAY_LABELS` is a deployment-owned JSON object mapping
+  opaque tool identifiers to localized user-facing labels. The frontend uses
+  it for activity descriptions while keeping the identifiers available only to
+  internal protocols and diagnostics; do not add application-specific labels
+  to core components.
+
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns composer busy-state wiring.
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns branch-from-turn submission and navigation; sidecar `MessageList` instances do not receive the branch action.
 - `src/app/workspace/chats/[thread_id]/page.tsx` and `src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx` own active-goal display state for their composer overlays.

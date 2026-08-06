@@ -67,6 +67,7 @@ import {
   parseSubtaskResult,
 } from "@/core/tasks/subtask-result";
 import type { AgentThreadState } from "@/core/threads";
+import { useToolDisplayLabels } from "@/core/tools/context";
 import { cn } from "@/lib/utils";
 
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
@@ -258,7 +259,8 @@ export function MessageList({
   initialScroll?: ConversationProps["initial"];
   resizeScroll?: ConversationProps["resize"];
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const toolDisplayLabels = useToolDisplayLabels();
   const sidecar = useMaybeSidecar();
   const [selectionToolbar, setSelectionToolbar] =
     useState<SelectionToolbarState | null>(null);
@@ -301,8 +303,8 @@ export function MessageList({
   const turnUsageMessagesByGroupIndex =
     getAssistantTurnUsageMessages(groupedMessages);
   const tokenDebugSteps = useMemo(
-    () => buildTokenDebugSteps(messages, t),
-    [messages, t],
+    () => buildTokenDebugSteps(messages, t, toolDisplayLabels, locale),
+    [locale, messages, t, toolDisplayLabels],
   );
   const streamingMessages = useMemo(
     () =>
