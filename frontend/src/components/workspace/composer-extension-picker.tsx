@@ -19,10 +19,14 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import {
   findComposerScopeLabel,
+  getComposerScopeGroupState,
   getSelectedScopeExpansion,
+  groupComposerScopeNodes,
   parseComposerScopeResponse,
   toggleComposerScope,
+  toggleComposerScopeGroup,
   type ComposerExtensionSelection,
+  type ComposerScopeGroup,
   type ComposerScopeNode,
   type ComposerScopeRef,
 } from "@/core/workspace-apps/chat-input";
@@ -84,6 +88,7 @@ export function ComposerExtensionPicker({
   }, [config, nodes.length, open, reloadKey]);
 
   const scopes = useMemo(() => value?.scopes ?? [], [value?.scopes]);
+  const scopeGroups = useMemo(() => groupComposerScopeNodes(nodes), [nodes]);
   const selectedLabel = useMemo(() => {
     if (scopes.length === 0) return allLabel;
     if (scopes.length === 1 && scopes[0]) {
@@ -137,6 +142,13 @@ export function ComposerExtensionPicker({
     onChange({
       enabled: value?.enabled ?? false,
       scopes: toggleComposerScope(scopes, target, nodes),
+    });
+  };
+
+  const toggleScopeGroup = (group: ComposerScopeGroup) => {
+    onChange({
+      enabled: value?.enabled ?? false,
+      scopes: toggleComposerScopeGroup(scopes, group.nodes),
     });
   };
 
@@ -221,6 +233,34 @@ export function ComposerExtensionPicker({
     );
   };
 
+  const renderGroup = (group: ComposerScopeGroup) => {
+    const groupState = getComposerScopeGroupState(scopes, group.nodes);
+    return (
+      <div key={`group:${group.id}`} className="border-border/60 border-b pb-1">
+        <label className="bg-muted/40 hover:bg-accent flex min-h-9 w-full items-center gap-2 rounded-sm px-2 text-left text-sm">
+          <input
+            type="checkbox"
+            className="accent-primary size-3.5"
+            checked={groupState.selected}
+            ref={(element) => {
+              if (element) element.indeterminate = groupState.indeterminate;
+            }}
+            aria-label={group.label}
+            aria-checked={
+              groupState.indeterminate ? "mixed" : groupState.selected
+            }
+            onChange={() => toggleScopeGroup(group)}
+          />
+          <FolderIcon className="text-muted-foreground size-4" />
+          <span className="flex-1 truncate font-medium">{group.label}</span>
+        </label>
+        <div role="group" className="pt-0.5">
+          {group.nodes.map((node) => renderNode(node, 0))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <div className="flex min-w-0 items-center">
@@ -299,7 +339,13 @@ export function ComposerExtensionPicker({
             {t.inputBox.composerScopeLoadFailed}
           </button>
         ) : (
-          <div role="tree">{nodes.map((node) => renderNode(node, 0))}</div>
+          <div role="tree">
+            {scopeGroups.map((group) =>
+              group.label
+                ? renderGroup(group)
+                : group.nodes.map((node) => renderNode(node, 0)),
+            )}
+          </div>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

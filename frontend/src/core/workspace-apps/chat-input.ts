@@ -6,6 +6,12 @@ export const composerScopeNodeSchema: z.ZodType<ComposerScopeNode> = z.lazy(
       id: z.string().min(1).max(200),
       label: z.string().min(1).max(500),
       kind: z.enum(["collection", "document"]),
+      group: z
+        .object({
+          id: z.string().min(1).max(100),
+          label: z.string().min(1).max(200),
+        })
+        .optional(),
       children: z.array(composerScopeNodeSchema),
     }),
 );
@@ -23,7 +29,22 @@ export type ComposerScopeNode = {
   id: string;
   label: string;
   kind: "collection" | "document";
+  group?: {
+    id: string;
+    label: string;
+  };
   children: ComposerScopeNode[];
+};
+
+export type ComposerScopeGroup = {
+  id: string;
+  label: string;
+  nodes: ComposerScopeNode[];
+};
+
+export type ComposerScopeGroupState = {
+  selected: boolean;
+  indeterminate: boolean;
 };
 
 export type ComposerExtensionSelection = {
@@ -33,12 +54,86 @@ export type ComposerExtensionSelection = {
 
 export type ComposerScopeRef = Pick<ComposerScopeNode, "kind" | "id">;
 
+function scopeKey(scope: ComposerScopeRef) {
+  return `${scope.kind}:${scope.id}`;
+}
+
+function nodeContainsScope(
+  node: ComposerScopeNode,
+  target: ComposerScopeRef,
+): boolean {
+  if (scopeKey(node) === scopeKey(target)) return true;
+  return node.children.some((child) => nodeContainsScope(child, target));
+}
+
+function findScopeNode(
+  nodes: ComposerScopeNode[],
+  target: ComposerScopeRef,
+): ComposerScopeNode | undefined {
+  for (const node of nodes) {
+    if (scopeKey(node) === scopeKey(target)) return node;
+    const nested = findScopeNode(node.children, target);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
+function scopeCoversTarget(
+  scopes: ComposerScopeRef[],
+  target: ComposerScopeRef,
+  nodes: ComposerScopeNode[],
+): boolean {
+  return scopes.some((scope) => {
+    if (scopeKey(scope) === scopeKey(target)) return true;
+    const selectedNode = findScopeNode(nodes, scope);
+    return selectedNode?.kind === "collection" &&
+      nodeContainsScope(selectedNode, target);
+  });
+}
+
+export function groupComposerScopeNodes(
+  nodes: ComposerScopeNode[],
+): ComposerScopeGroup[] {
+  const groups = new Map<string, ComposerScopeGroup>();
+  for (const node of nodes) {
+    const id = node.group?.id ?? "ungrouped";
+    const group = groups.get(id);
+    if (group) {
+      group.nodes.push(node);
+      continue;
+    }
+    groups.set(id, {
+      id,
+      label: node.group?.label ?? "",
+      nodes: [node],
+    });
+  }
+  return [...groups.values()];
+}
+
+export function getComposerScopeGroupState(
+  scopes: ComposerScopeRef[],
+  groupNodes: ComposerScopeNode[],
+): ComposerScopeGroupState {
+  const targets = groupNodes.map(({ kind, id }) => ({ kind, id }));
+  const coveredCount = targets.filter((target) =>
+    scopeCoversTarget(scopes, target, groupNodes),
+  ).length;
+  const hasGroupScope = scopes.some((scope) =>
+    groupNodes.some((node) => nodeContainsScope(node, scope)),
+  );
+  const selected = targets.length > 0 && coveredCount === targets.length;
+  return {
+    selected,
+    indeterminate: hasGroupScope && !selected,
+  };
+}
+
 export function toggleComposerScope(
   scopes: ComposerScopeRef[],
   target: ComposerScopeRef,
   nodes: ComposerScopeNode[],
 ): ComposerScopeRef[] {
-  const scopeKey = (scope: ComposerScopeRef) => `${scope.kind}:${scope.id}`;
   const targetKey = scopeKey(target);
   if (scopes.some((scope) => scopeKey(scope) === targetKey)) {
     return scopes.filter((scope) => scopeKey(scope) !== targetKey);
@@ -71,6 +166,23 @@ export function toggleComposerScope(
     ...scopes.filter((scope) => !overlapping.has(scopeKey(scope))),
     target,
   ];
+}
+
+export function toggleComposerScopeGroup(
+  scopes: ComposerScopeRef[],
+  groupNodes: ComposerScopeNode[],
+): ComposerScopeRef[] {
+  const state = getComposerScopeGroupState(scopes, groupNodes);
+  const retained = scopes.filter(
+    (scope) => !groupNodes.some((node) => nodeContainsScope(node, scope)),
+  );
+  if (state.selected) return retained;
+
+  return groupNodes.reduce(
+    (current, node) =>
+      toggleComposerScope(current, { kind: node.kind, id: node.id }, groupNodes),
+    retained,
+  );
 }
 
 export function findComposerScopeLabel(

@@ -2,9 +2,12 @@ import { describe, expect, it } from "@rstest/core";
 
 import {
   buildComposerExtensionRunContext,
+  getComposerScopeGroupState,
   getSelectedScopeExpansion,
+  groupComposerScopeNodes,
   parseComposerScopeResponse,
   toggleComposerScope,
+  toggleComposerScopeGroup,
 } from "@/core/workspace-apps/chat-input";
 
 describe("workspace app chat input", () => {
@@ -106,17 +109,98 @@ describe("workspace app chat input", () => {
     });
   });
 
+  it("groups top-level scopes and toggles all content in a knowledge space", () => {
+    const personalRoot = {
+      id: "personal-root",
+      label: "个人制度",
+      kind: "collection" as const,
+      group: { id: "personal", label: "个人知识库" },
+      children: [
+        {
+          id: "personal-doc",
+          label: "个人手册.pdf",
+          kind: "document" as const,
+          group: { id: "personal", label: "个人知识库" },
+          children: [],
+        },
+      ],
+    };
+    const publicRoot = {
+      id: "public-root",
+      label: "公共制度",
+      kind: "collection" as const,
+      group: { id: "public", label: "公共知识库" },
+      children: [],
+    };
+    const nodes = [personalRoot, publicRoot];
+    const [personalGroup, publicGroup] = groupComposerScopeNodes(nodes);
+
+    expect(personalGroup?.label).toBe("个人知识库");
+    expect(publicGroup?.label).toBe("公共知识库");
+    expect(
+      getComposerScopeGroupState([], personalGroup?.nodes ?? []),
+    ).toEqual({ selected: false, indeterminate: false });
+
+    const selected = toggleComposerScopeGroup([], personalGroup!.nodes);
+    expect(selected).toEqual([{ kind: "collection", id: "personal-root" }]);
+    expect(
+      getComposerScopeGroupState(selected, personalGroup!.nodes),
+    ).toEqual({ selected: true, indeterminate: false });
+    expect(toggleComposerScopeGroup(selected, personalGroup!.nodes)).toEqual(
+      [],
+    );
+  });
+
+  it("marks a knowledge space as partially selected when a child is chosen", () => {
+    const nodes = [
+      {
+        id: "root",
+        label: "个人制度",
+        kind: "collection" as const,
+        group: { id: "personal", label: "个人知识库" },
+        children: [
+          {
+            id: "doc",
+            label: "手册.pdf",
+            kind: "document" as const,
+            group: { id: "personal", label: "个人知识库" },
+            children: [],
+          },
+        ],
+      },
+    ];
+    const group = groupComposerScopeNodes(nodes)[0]!;
+    expect(
+      getComposerScopeGroupState(
+        [{ kind: "document", id: "doc" }],
+        group.nodes,
+      ),
+    ).toEqual({ selected: false, indeterminate: true });
+  });
+
   it("drops malformed scope nodes returned by an extension", () => {
     expect(
       parseComposerScopeResponse({
         nodes: [
-          { id: "dataset-1", label: "制度", kind: "collection", children: [] },
+          {
+            id: "dataset-1",
+            label: "制度",
+            kind: "collection",
+            group: { id: "public", label: "公共知识库" },
+            children: [],
+          },
           { id: "bad", label: "", kind: "document" },
         ],
       }),
     ).toEqual({
       nodes: [
-        { id: "dataset-1", label: "制度", kind: "collection", children: [] },
+        {
+          id: "dataset-1",
+          label: "制度",
+          kind: "collection",
+          group: { id: "public", label: "公共知识库" },
+          children: [],
+        },
       ],
     });
   });
