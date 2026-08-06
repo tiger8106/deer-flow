@@ -43,6 +43,26 @@ describe("MessageGroup", () => {
     expect(html).toContain("DeerFlow issue 4027");
   });
 
+  it("does not expose raw tool identifiers in generic processing steps", () => {
+    const html = renderGroup([
+      {
+        id: "ai-raw-tool",
+        type: "ai",
+        content: "",
+        tool_calls: [
+          {
+            id: "call-raw-tool",
+            name: "knowledge_query",
+            args: {},
+          },
+        ],
+      } as Message,
+    ]);
+
+    expect(html).not.toContain("knowledge_query");
+    expect(html).toContain("Processing");
+  });
+
   it("keeps assistant text visible while older tool steps stay collapsed", () => {
     const html = renderGroup([
       {

@@ -99,6 +99,10 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   the product as Tiger and avoid upstream product names or implementation details.
   This does not authorize renaming internal API paths, event keys, storage keys,
   or package imports.
+- Tool activity shown in normal workspace interaction must use a user-facing
+  description or generic processing label. Never interpolate raw tool names or
+  other implementation identifiers into the fallback label; keep those values
+  available only to internal protocols and diagnostics.
 
 - `components/workspace/external-preview` owns generic right-panel iframe
   state. Citation URLs opt in only with `preview=side-panel`, may carry an

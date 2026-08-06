@@ -656,7 +656,7 @@ none of the directory routes expose password/provider metadata.
 
 The first account created through local registration is assigned the `admin` system
 role; later accounts are regular users. Administrators can list the same minimal
-minimal `{id, email, system_role}` directory records through
+`{id, email, system_role}` directory records through
 `GET /api/v1/auth/users`. Authenticated external modules can search the same minimal
 records through `GET /api/v1/auth/users/search?query=<text>` (a non-empty
 query returns at most 20 matches), while authenticated resource views can resolve a
@@ -685,6 +685,10 @@ uv run python -m deerflow.skills.review.cli ../skills/public/data-analysis --for
 ```
 
 Tools follow the same philosophy. DeerFlow comes with a core toolset — web search, web fetch, rendered web capture, file operations, bash execution — and supports custom tools via MCP servers and Python functions. Swap anything. Add anything.
+
+In normal workspace interaction, tool activity is presented with user-facing
+descriptions; raw tool identifiers are reserved for internal protocols and
+diagnostics.
 
 Gateway-generated follow-up suggestions now normalize both plain-string model output and block/list-style rich content before parsing the JSON array response, so provider-specific content wrappers do not silently drop suggestions.
 

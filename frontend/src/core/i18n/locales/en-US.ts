@@ -564,7 +564,7 @@ export const enUS: Translations = {
     executeCommand: "Execute command",
     presentFiles: "Present files",
     needYourHelp: "Need your help",
-    useTool: (toolName: string) => `Use "${toolName}" tool`,
+    useTool: (_toolName: string) => "Processing",
     searchFor: (query: string) => `Search for "${query}"`,
     searchForRelatedInfo: "Search for related information",
     searchForRelatedImages: "Search for related images",

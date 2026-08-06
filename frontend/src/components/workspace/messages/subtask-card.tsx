@@ -218,7 +218,9 @@ export function SubtaskCard({
                 key={`${step.message_index}-${i}`}
                 label={
                   step.kind === "tool" ? (
-                    (step.tool_name ?? t.subtasks[task.status])
+                    step.tool_name
+                      ? t.toolCalls.useTool(step.tool_name)
+                      : t.subtasks[task.status]
                   ) : (
                     <div className="text-muted-foreground line-clamp-3 text-sm">
                       <MarkdownContent
