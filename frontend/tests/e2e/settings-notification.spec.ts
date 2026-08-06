@@ -108,7 +108,7 @@ test.describe("Notification settings", () => {
       .toEqual([
         {
           title: "New Chat",
-          body: "Hello from DeerFlow!",
+          body: "Hello from Tiger!",
         },
       ]);
   });

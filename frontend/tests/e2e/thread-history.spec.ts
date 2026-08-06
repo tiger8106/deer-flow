@@ -375,7 +375,7 @@ test.describe("Thread history", () => {
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     await textarea.fill("Message that must disappear in the next new chat");
     await textarea.press("Enter");
-    await expect(page.getByText("Hello from DeerFlow!")).toBeVisible({
+    await expect(page.getByText("Hello from Tiger!")).toBeVisible({
       timeout: 15_000,
     });
 
@@ -398,7 +398,7 @@ test.describe("Thread history", () => {
     // interaction forcing another render.
     await newChatLink.click();
     await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
-    await expect(page.getByText("Hello from DeerFlow!")).toHaveCount(0);
+    await expect(page.getByText("Hello from Tiger!")).toHaveCount(0);
     await expect(textarea).toBeVisible();
   });
 
@@ -423,7 +423,7 @@ test.describe("Thread history", () => {
     await textarea.fill("What should disappear after deletion?");
     await textarea.press("Enter");
 
-    await expect(page.getByText("Hello from DeerFlow!")).toBeVisible({
+    await expect(page.getByText("Hello from Tiger!")).toBeVisible({
       timeout: 15_000,
     });
 
@@ -442,12 +442,12 @@ test.describe("Thread history", () => {
 
     await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
     await expect(page.getByText("Previous question")).toHaveCount(0);
-    await expect(page.getByText("Hello from DeerFlow!")).toHaveCount(0);
+    await expect(page.getByText("Hello from Tiger!")).toHaveCount(0);
     await expect(page.getByPlaceholder(/how can i assist you/i)).toBeVisible();
 
     await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
     await page.waitForURL("**/workspace/chats/new");
-    await expect(page.getByText("Hello from DeerFlow!")).toHaveCount(0);
+    await expect(page.getByText("Hello from Tiger!")).toHaveCount(0);
     await expect(page.getByPlaceholder(/how can i assist you/i)).toBeVisible();
   });
 

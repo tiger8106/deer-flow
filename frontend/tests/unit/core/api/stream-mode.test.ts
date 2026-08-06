@@ -1,6 +1,9 @@
 import { expect, test } from "@rstest/core";
 
-import { sanitizeRunStreamOptions } from "@/core/api/stream-mode";
+import {
+  sanitizeRunStreamOptions,
+  warnUnsupportedStreamModes,
+} from "@/core/api/stream-mode";
 
 test("drops unsupported stream modes from array payloads", () => {
   const sanitized = sanitizeRunStreamOptions({
@@ -37,4 +40,15 @@ test("keeps payloads without streamMode untouched", () => {
   };
 
   expect(sanitizeRunStreamOptions(options)).toBe(options);
+});
+
+test("unsupported stream mode warnings use Tiger branding", () => {
+  const warnings: string[] = [];
+
+  warnUnsupportedStreamModes(["tiger-test-mode"], (message) => {
+    warnings.push(message);
+  });
+
+  expect(warnings[0]).toContain("[tiger]");
+  expect(warnings[0]).not.toContain("DeerFlow");
 });

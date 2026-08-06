@@ -103,6 +103,32 @@ def test_apply_prompt_template_includes_relative_path_guidance(monkeypatch):
     assert "`hello.txt`, `../uploads/data.csv`, and `../outputs/report.md`" in prompt
 
 
+def test_default_prompt_uses_tiger_identity_without_upstream_branding(monkeypatch):
+    config = SimpleNamespace(
+        sandbox=SimpleNamespace(mounts=[]),
+        skills=SimpleNamespace(container_path="/mnt/skills", use="deerflow.skills.storage.local_skill_storage:LocalSkillStorage", get_skills_path=lambda: Path("/tmp/skills")),
+        skill_evolution=SimpleNamespace(enabled=False),
+        tool_search=SimpleNamespace(enabled=False),
+        memory=SimpleNamespace(enabled=False, injection_enabled=True, max_injection_tokens=2000),
+        acp_agents={},
+    )
+    monkeypatch.setattr(prompt_module, "get_or_new_skill_storage", lambda app_config=None: SimpleNamespace(load_skills=lambda enabled_only=True: []))
+    monkeypatch.setattr(prompt_module, "get_agent_soul", lambda agent_name=None: "")
+
+    prompt = prompt_module.apply_prompt_template(app_config=config)
+
+    assert "Tiger 智能助手" in prompt
+    assert "Do not mention or reveal upstream product names" in prompt
+    assert "DeerFlow" not in prompt
+    assert "deer-flow.dev" not in prompt
+    assert "bytedance/deer-flow" not in prompt
+
+    custom_prompt = prompt_module.apply_prompt_template(agent_name="Deer-Flow 2.0", app_config=config)
+
+    assert "Tiger 智能助手" in custom_prompt
+    assert "Deer-Flow 2.0" not in custom_prompt
+
+
 def test_apply_prompt_template_includes_memory_tool_guidance_only_in_tool_mode(monkeypatch):
     tool_config = SimpleNamespace(
         sandbox=SimpleNamespace(mounts=[]),

@@ -37,6 +37,13 @@ def test_clean_rewritten_text_keeps_literal_think_tag():
     assert input_polish._clean_rewritten_text(text) == "Explain what the <think> tag does in reasoning models."
 
 
+def test_input_polish_instruction_uses_tiger_branding_without_upstream_identity():
+    instruction = input_polish._build_system_instruction()
+
+    assert "Tiger's pre-send prompt optimizer" in instruction
+    assert "DeerFlow" not in instruction
+
+
 def test_polish_input_uses_config_model_and_preserves_response(monkeypatch):
     request = input_polish.InputPolishRequest(
         text="/web-dev 做一个页面",

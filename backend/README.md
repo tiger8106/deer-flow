@@ -48,6 +48,13 @@ The single LangGraph agent (`lead_agent`) is the runtime entry point, created vi
 - **Subagent delegation** for parallel task execution
 - **System prompt** with skills injection, memory context, and working directory guidance
 
+### User-facing identity
+
+The Tiger deployment presents the lead agent and generated report templates as Tiger. User-facing
+responses, prompts, channel messages, and generated artifacts must not disclose upstream product
+names, source repositories, or hidden runtime implementation details. Internal Python package names,
+API routes, and protocol keys remain unchanged for compatibility.
+
 ### Middleware Chain
 
 Middlewares execute in strict order, each handling a specific concern:

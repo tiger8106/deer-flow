@@ -36,7 +36,7 @@ class LaunchPlan:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="deerflow",
-        description="DeerFlow terminal workbench — a TUI over the embedded DeerFlow harness.",
+        description="Tiger terminal workbench — a terminal interface for the AI assistant.",
         add_help=True,
     )
     parser.add_argument("message", nargs="*", help="initial prompt for the TUI, or message in --cli mode")
@@ -137,7 +137,7 @@ def plan_launch(
 # --------------------------------------------------------------------------- #
 
 _HEADLESS_HELP = """\
-deerflow — DeerFlow terminal workbench
+deerflow — Tiger terminal workbench
 
   deerflow                      launch the terminal UI (TTY required)
   deerflow --tui                force the terminal UI

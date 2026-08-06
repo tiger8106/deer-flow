@@ -301,11 +301,11 @@ def create_app() -> FastAPI:
     openapi_url = "/openapi.json" if config.enable_docs else None
 
     app = FastAPI(
-        title="DeerFlow API Gateway",
+        title="Tiger API Gateway",
         description="""
-## DeerFlow API Gateway
+## Tiger API Gateway
 
-API Gateway for DeerFlow - A LangGraph-based AI agent backend with sandbox execution capabilities.
+API Gateway for Tiger - An AI agent backend with sandbox execution capabilities.
 
 ### Features
 
@@ -353,7 +353,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
             },
             {
                 "name": "threads",
-                "description": "Manage DeerFlow thread-local filesystem data",
+                "description": "Manage Tiger thread-local filesystem data",
             },
             {
                 "name": "agents",
@@ -499,7 +499,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
         Returns:
             Service health status information.
         """
-        return {"status": "healthy", "service": "deer-flow-gateway"}
+        return {"status": "healthy", "service": "tiger-gateway"}
 
     return app
 

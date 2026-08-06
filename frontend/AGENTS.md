@@ -94,6 +94,12 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   unchanged for upstream compatibility. Re-audit these white-label surfaces
   after every upstream merge.
 
+- Agent-facing copy is also part of the white-label boundary: the runtime prompt,
+  generated artifacts, channel notices, and composer assistance should identify
+  the product as Tiger and avoid upstream product names or implementation details.
+  This does not authorize renaming internal API paths, event keys, storage keys,
+  or package imports.
+
 - `components/workspace/external-preview` owns generic right-panel iframe
   state. Citation URLs opt in only with `preview=side-panel`, may carry an
   opaque `preview_key` for iframe reuse, and keep domain-specific preview,
