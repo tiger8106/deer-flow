@@ -118,6 +118,7 @@ export const enUS: Translations = {
     quotaPeriodWeek: "This week",
     quotaPeriodMonth: "This month",
     quotaPeriodYear: "This year",
+    quotaWindow: "Validity",
     quotaUnlimited: "Unlimited",
     quotaExhausted:
       "Your question quota is exhausted. Contact an administrator.",

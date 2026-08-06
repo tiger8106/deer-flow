@@ -101,6 +101,7 @@ export interface Translations {
     quotaPeriodWeek: string;
     quotaPeriodMonth: string;
     quotaPeriodYear: string;
+    quotaWindow: string;
     quotaUnlimited: string;
     quotaExhausted: string;
     createSkillPrompt: string;

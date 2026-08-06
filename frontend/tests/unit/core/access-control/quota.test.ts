@@ -63,6 +63,25 @@ describe("quota status", () => {
     ).toBe("How can I help?（This week questions remaining: Unlimited）");
   });
 
+  it("uses a configured date window instead of a calendar period", () => {
+    expect(
+      buildQuotaPlaceholder(
+        {
+          ...limited,
+          effective_source: "user",
+          effective_from: "2026-08-06",
+          expires_at: "2026-08-10",
+        },
+        "user",
+        "今天我能为你做些什么？",
+        "{period}剩余问答次数：{count}",
+        "不限",
+        { day: "本日", week: "本周", month: "本月", year: "本年" },
+        "有效期",
+      ),
+    ).toBe("今天我能为你做些什么？（2026-08-06—2026-08-10剩余问答次数：1）");
+  });
+
   it.each([
     ["day", "本日"],
     ["week", "本周"],
@@ -87,6 +106,9 @@ describe("quota status", () => {
       isQuotaExhausted({ ...limited, quota_enabled: false, remaining: 0 }),
     ).toBe(false);
     expect(isQuotaExhausted({ ...limited, remaining: null })).toBe(false);
+    expect(
+      isQuotaExhausted({ ...limited, quota_enabled: false, effective_mode: "blocked" }),
+    ).toBe(true);
   });
 
   it("optimistically decrements a limited quota without going below zero", () => {

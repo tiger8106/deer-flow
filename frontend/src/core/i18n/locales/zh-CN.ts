@@ -117,6 +117,7 @@ export const zhCN: Translations = {
     quotaPeriodWeek: "本周",
     quotaPeriodMonth: "本月",
     quotaPeriodYear: "本年",
+    quotaWindow: "有效期",
     quotaUnlimited: "不限",
     quotaExhausted: "问答额度已用完，请联系管理员",
     createSkillPrompt:

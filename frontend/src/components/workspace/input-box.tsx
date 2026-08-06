@@ -345,6 +345,7 @@ export function InputBox({
       month: t.inputBox.quotaPeriodMonth,
       year: t.inputBox.quotaPeriodYear,
     },
+    t.inputBox.quotaWindow,
   );
   const workspaceApps = useWorkspaceApps();
   const chatInputApps = workspaceApps.filter((app) => app.chatInput);

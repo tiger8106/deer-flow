@@ -5,8 +5,12 @@ import { fetch } from "@/core/api/fetcher";
 export type QuotaStatus = {
   quota_enabled: boolean;
   quota_period: "day" | "week" | "month" | "year";
+  effective_mode?: "limited" | "unlimited" | "blocked";
   effective_limit: number | null;
   remaining: number | null;
+  effective_source?: "global" | "role" | "user";
+  effective_from?: string | null;
+  expires_at?: string | null;
 };
 
 export const myQuotaQueryKey = ["access-control", "my-quota"] as const;
@@ -18,20 +22,27 @@ export function buildQuotaPlaceholder(
   quotaRemaining: string,
   quotaUnlimited: string,
   quotaPeriodLabels: Record<QuotaStatus["quota_period"], string>,
+  quotaWindowLabel = "Validity",
 ): string {
   if (systemRole !== "user" || status?.quota_enabled !== true) {
     return placeholder;
   }
+  const periodLabel = status.effective_source && status.effective_source !== "global"
+    ? status.effective_from || status.expires_at
+      ? `${status.effective_from ?? quotaWindowLabel}—${status.expires_at ?? quotaWindowLabel}`
+      : quotaWindowLabel
+    : quotaPeriodLabels[status.quota_period];
   const remaining =
     status.remaining === null ? quotaUnlimited : String(status.remaining);
   const remainingLabel = quotaRemaining
-    .replace("{period}", quotaPeriodLabels[status.quota_period])
+    .replace("{period}", periodLabel)
     .replace("{count}", remaining);
   return `${placeholder}（${remainingLabel}）`;
 }
 
 export function isQuotaExhausted(status: QuotaStatus | undefined): boolean {
-  return status?.quota_enabled === true && status.remaining === 0;
+  return status?.effective_mode === "blocked" ||
+    (status?.quota_enabled === true && status.remaining === 0);
 }
 
 export function decrementQuota(status: QuotaStatus | undefined) {
