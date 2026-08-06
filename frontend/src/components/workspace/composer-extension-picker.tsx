@@ -215,6 +215,11 @@ export function ComposerExtensionPicker({
             type="button"
             className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
             title={node.label}
+            onClick={() => {
+              if (isCollection && folderChildren.length > 0) {
+                toggleExpanded(setExpandedFolders, node.id);
+              }
+            }}
             onDoubleClick={() => {
               if (isCollection && documentChildren.length > 0) {
                 toggleExpanded(setExpandedDocuments, node.id);
@@ -297,7 +302,7 @@ export function ComposerExtensionPicker({
         </div>
         {expanded ? (
           <div role="group" className="pt-0.5">
-            {group.nodes.map((node) => renderNode(node, 0))}
+            {group.nodes.map((node) => renderNode(node, 1))}
           </div>
         ) : null}
       </div>
