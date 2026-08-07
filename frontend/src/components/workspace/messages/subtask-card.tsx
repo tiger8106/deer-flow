@@ -17,6 +17,7 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { ShineBorder } from "@/components/ui/shine-border";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { useI18n } from "@/core/i18n/hooks";
 import { hasToolCalls } from "@/core/messages/utils";
 import { useModels } from "@/core/models/hooks";
@@ -58,13 +59,15 @@ export function SubtaskCard({
   const [collapsed, setCollapsed] = useState(true);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
   const task = useSubtask(taskId)!;
+  const { user } = useAuth();
   const { models, tokenUsageEnabled } = useModels();
+  const canViewTokenUsage = user?.system_role === "admin" && tokenUsageEnabled;
   const updateSubtask = useUpdateSubtask();
   const modelLabel = resolveSubtaskModelLabel(task.modelName, models);
-  const tokenLabel = tokenUsageEnabled
+  const tokenLabel = canViewTokenUsage
     ? formatSubtaskTokenUsage(task.usage)
     : undefined;
-  const runtimeUsageLabel = tokenUsageEnabled
+  const runtimeUsageLabel = canViewTokenUsage
     ? tokenLabel
       ? `${tokenLabel} ${t.tokenUsage.label}`
       : task.status === "in_progress"
@@ -226,14 +229,16 @@ export function SubtaskCard({
                 key={`${step.message_index}-${i}`}
                 label={
                   step.kind === "tool" ? (
-                    step.tool_name
-                      ? resolveToolDisplayLabel(
-                          step.tool_name,
-                          locale,
-                          toolDisplayLabels,
-                          t.toolCalls.useTool(step.tool_name),
-                        )
-                      : t.subtasks[task.status]
+                    step.tool_name ? (
+                      resolveToolDisplayLabel(
+                        step.tool_name,
+                        locale,
+                        toolDisplayLabels,
+                        t.toolCalls.useTool(step.tool_name),
+                      )
+                    ) : (
+                      t.subtasks[task.status]
+                    )
                   ) : (
                     <div className="text-muted-foreground line-clamp-3 text-sm">
                       <MarkdownContent

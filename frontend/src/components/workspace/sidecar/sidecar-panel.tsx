@@ -48,6 +48,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   buildHumanInputResponseText,
@@ -148,10 +149,12 @@ function promptMessageFiles(message: PromptInputMessage) {
 
 export function SidecarPanel({ className }: { className?: string }) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const sidecar = useSidecar();
   const { thread: parentThread } = useParentThread();
   const [localSettings] = useLocalSettings();
   const { models, tokenUsageEnabled } = useModels();
+  const canViewTokenUsage = user?.system_role === "admin" && tokenUsageEnabled;
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [creatingThread, setCreatingThread] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -217,7 +220,7 @@ export function SidecarPanel({ className }: { className?: string }) {
       ),
     [thread.messages],
   );
-  const tokenUsageInlineMode = tokenUsageEnabled
+  const tokenUsageInlineMode = canViewTokenUsage
     ? localSettings.tokenUsage.inlineMode
     : "off";
   const disabled =
