@@ -653,6 +653,7 @@ This invokes `alembic revision --autogenerate` against the live ORM models. Revi
 - `migrations/_helpers.py` — `safe_add_column` / `safe_drop_column`
 - `migrations/versions/0001_baseline.py` — chain root, matches the schema `create_all` produces from `Base.metadata`
 - `migrations/versions/0002_runs_token_usage.py` — fixes issue #3682
+- `migrations/versions/0005_run_stop_reason.py` through `0012_merge_tiger_admin.py` — keep the migration graph compatible with Tiger data created by the newer worktree; retain these revisions when reusing that data
 - `persistence/bootstrap.py` — `bootstrap_schema(engine, backend=...)`, the three-branch decision + locking
 - Tests: `tests/test_persistence_bootstrap.py` (branches), `tests/test_persistence_bootstrap_concurrency.py` (concurrency), `tests/test_persistence_bootstrap_regression.py` (issue #3682), `tests/test_persistence_migrations_env.py` (filter), `tests/blocking_io/test_persistence_bootstrap.py` (asyncio.to_thread anchor)
 
