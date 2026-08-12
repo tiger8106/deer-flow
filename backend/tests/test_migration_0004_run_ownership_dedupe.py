@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 import deerflow.persistence.models  # noqa: F401  -- registers ORM models
 from deerflow.persistence.base import Base
 from deerflow.persistence.engine import close_engine, init_engine
+from deerflow.persistence.migrations.constants import VERSION_TABLE
 from deerflow.persistence.run.model import RunRow
 
 pytestmark = pytest.mark.asyncio
@@ -60,9 +61,9 @@ def _seed_pre_0004_with_duplicates(db_path: Path) -> None:
             conn.execute(sa.text("DROP INDEX IF EXISTS uq_runs_thread_active"))
             # Stamp at 0003 so bootstrap takes the versioned branch and runs
             # ``alembic upgrade head`` (which is what executes 0004.upgrade()).
-            conn.execute(sa.text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
-            conn.execute(sa.text("DELETE FROM alembic_version"))
-            conn.execute(sa.text("INSERT INTO alembic_version (version_num) VALUES ('0003_scheduled_tasks')"))
+            conn.execute(sa.text(f"CREATE TABLE IF NOT EXISTS {VERSION_TABLE} (version_num VARCHAR(32) NOT NULL)"))
+            conn.execute(sa.text(f"DELETE FROM {VERSION_TABLE}"))
+            conn.execute(sa.text(f"INSERT INTO {VERSION_TABLE} (version_num) VALUES ('0003_scheduled_tasks')"))
 
         base = datetime.now(UTC)
         with Session(sync_engine) as session:
@@ -155,8 +156,8 @@ async def test_migration_dedupes_duplicate_active_rows_before_unique_index(tmp_p
         assert _index_exists(db_path, "ix_runs_lease")
 
         with sqlite3.connect(db_path) as raw:
-            version_row = raw.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert version_row[0] == "0005_first_user_admin"
+            version_row = raw.execute(f"SELECT version_num FROM {VERSION_TABLE}").fetchone()
+        assert version_row[0] == "0013_postgres_memory"
 
         # Sanity: the invariant the index enforces is now true — at most one
         # active row per thread.

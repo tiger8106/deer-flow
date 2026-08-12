@@ -23,9 +23,9 @@ def _seed_users_without_admin(db_path: Path) -> None:
     try:
         Base.metadata.create_all(engine)
         with engine.begin() as connection:
-            connection.execute(sa.text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
-            connection.execute(sa.text("DELETE FROM alembic_version"))
-            connection.execute(sa.text("INSERT INTO alembic_version (version_num) VALUES ('0004_run_ownership')"))
+            connection.execute(sa.text("CREATE TABLE IF NOT EXISTS deerflow_alembic_version (version_num VARCHAR(32) NOT NULL)"))
+            connection.execute(sa.text("DELETE FROM deerflow_alembic_version"))
+            connection.execute(sa.text("INSERT INTO deerflow_alembic_version (version_num) VALUES ('0004_run_ownership')"))
         created_at = datetime.now(UTC)
         with Session(engine) as session:
             session.add_all(
@@ -61,11 +61,11 @@ async def test_migration_promotes_only_earliest_user_when_no_admin(tmp_path: Pat
     try:
         with sqlite3.connect(db_path) as connection:
             roles = connection.execute("SELECT email, system_role FROM users ORDER BY created_at").fetchall()
-            version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
+            version = connection.execute("SELECT version_num FROM deerflow_alembic_version").fetchone()
         assert roles == [
             ("first@example.com", "admin"),
             ("second@example.com", "user"),
         ]
-        assert version == ("0005_first_user_admin",)
+        assert version == ("0013_postgres_memory",)
     finally:
         await close_engine()

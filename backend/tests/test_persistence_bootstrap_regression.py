@@ -28,6 +28,7 @@ import sqlalchemy as sa
 import deerflow.persistence.models  # noqa: F401  -- registers ORM models
 from deerflow.persistence.base import Base
 from deerflow.persistence.engine import close_engine, get_session_factory, init_engine
+from deerflow.persistence.migrations.constants import VERSION_TABLE
 from deerflow.persistence.run import RunRepository
 
 pytestmark = pytest.mark.asyncio
@@ -63,7 +64,10 @@ async def test_legacy_database_recovers_token_usage_column(tmp_path: Path) -> No
         cols = {row[1] for row in raw.execute("PRAGMA table_info(runs)").fetchall()}
         assert "run_id" in cols
         assert "token_usage_by_model" not in cols
-        version_table_count = raw.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='alembic_version'").fetchone()[0]
+        version_table_count = raw.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?",
+            (VERSION_TABLE,),
+        ).fetchone()[0]
         assert version_table_count == 0
 
     # Run the same init_engine path FastAPI lifespan uses on startup.
@@ -75,8 +79,8 @@ async def test_legacy_database_recovers_token_usage_column(tmp_path: Path) -> No
         with sqlite3.connect(db_path) as raw:
             cols = {row[1] for row in raw.execute("PRAGMA table_info(runs)").fetchall()}
             assert "token_usage_by_model" in cols
-            version_row = raw.execute("SELECT version_num FROM alembic_version").fetchone()
-            assert version_row[0] == "0005_first_user_admin"
+            version_row = raw.execute(f"SELECT version_num FROM {VERSION_TABLE}").fetchone()
+            assert version_row[0] == "0013_postgres_memory"
 
         # And the read path that originally 500'd must now succeed.
         sf = get_session_factory()
@@ -115,7 +119,7 @@ async def test_legacy_database_with_manual_alter_still_bootstraps(tmp_path: Path
             cols = [row[1] for row in raw.execute("PRAGMA table_info(runs)").fetchall()]
             # No duplicate column -- list, not set, to catch dupes.
             assert cols.count("token_usage_by_model") == 1
-            version_row = raw.execute("SELECT version_num FROM alembic_version").fetchone()
-            assert version_row[0] == "0005_first_user_admin"
+            version_row = raw.execute(f"SELECT version_num FROM {VERSION_TABLE}").fetchone()
+            assert version_row[0] == "0013_postgres_memory"
     finally:
         await close_engine()

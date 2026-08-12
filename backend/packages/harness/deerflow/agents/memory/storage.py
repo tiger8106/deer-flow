@@ -1,6 +1,7 @@
 """Memory storage providers."""
 
 import abc
+import copy
 import json
 import logging
 import threading
@@ -186,6 +187,114 @@ class FileMemoryStorage(MemoryStorage):
             return True
         except OSError as e:
             logger.error("Failed to save memory file: %s", e)
+            return False
+
+
+class PostgresMemoryStorage(MemoryStorage):
+    """Database-backed memory provider using DeerFlow's unified SQL database."""
+
+    def __init__(self, connection_string: str | None = None, *, engine=None):
+        if engine is not None:
+            self._engine = engine
+            return
+
+        if connection_string is None:
+            from deerflow.config.app_config import get_app_config
+
+            database = get_app_config().database
+            if database.backend != "postgres" or not database.postgres_url:
+                raise ValueError("PostgresMemoryStorage requires database.backend=postgres and database.postgres_url")
+            connection_string = database.postgres_url
+
+        from sqlalchemy import create_engine
+
+        sync_url = connection_string.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        if sync_url.startswith("postgresql://"):
+            sync_url = sync_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        self._engine = create_engine(sync_url, pool_pre_ping=True)
+
+    @staticmethod
+    def _scope(agent_name: str | None, user_id: str | None) -> tuple[str, str]:
+        return (user_id or "", agent_name or "")
+
+    def load(self, agent_name: str | None = None, *, user_id: str | None = None) -> dict[str, Any]:
+        from sqlalchemy import select
+
+        from deerflow.persistence.memory.model import MemoryRow
+
+        scope = self._scope(agent_name, user_id)
+        with self._engine.connect() as connection:
+            payload = connection.execute(
+                select(MemoryRow.memory_data).where(
+                    MemoryRow.user_id == scope[0],
+                    MemoryRow.agent_name == scope[1],
+                )
+            ).scalar_one_or_none()
+        return copy.deepcopy(payload) if isinstance(payload, dict) else create_empty_memory()
+
+    def reload(self, agent_name: str | None = None, *, user_id: str | None = None) -> dict[str, Any]:
+        return self.load(agent_name, user_id=user_id)
+
+    def save(self, memory_data: dict[str, Any], agent_name: str | None = None, *, user_id: str | None = None) -> bool:
+        payload = {**copy.deepcopy(memory_data), "lastUpdated": utc_now_iso_z()}
+        return self._upsert(payload, agent_name, user_id=user_id)
+
+    def import_payload(
+        self,
+        memory_data: dict[str, Any],
+        agent_name: str | None = None,
+        *,
+        user_id: str | None = None,
+    ) -> bool:
+        """Import an existing memory document without changing its timestamps."""
+        return self._upsert(copy.deepcopy(memory_data), agent_name, user_id=user_id)
+
+    def _upsert(
+        self,
+        payload: dict[str, Any],
+        agent_name: str | None = None,
+        *,
+        user_id: str | None = None,
+    ) -> bool:
+        from datetime import UTC, datetime
+
+        from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from deerflow.persistence.memory.model import MemoryRow
+
+        scope = self._scope(agent_name, user_id)
+        now = datetime.now(UTC)
+        values = {
+            "user_id": scope[0],
+            "agent_name": scope[1],
+            "memory_data": payload,
+            "revision": 1,
+            "created_at": now,
+            "updated_at": now,
+        }
+        try:
+            with self._engine.begin() as connection:
+                dialect = connection.dialect.name
+                if dialect == "postgresql":
+                    statement = postgresql_insert(MemoryRow).values(**values)
+                elif dialect == "sqlite":
+                    statement = sqlite_insert(MemoryRow).values(**values)
+                else:
+                    raise ValueError(f"Unsupported memory database dialect: {dialect}")
+                statement = statement.on_conflict_do_update(
+                    index_elements=[MemoryRow.user_id, MemoryRow.agent_name],
+                    set_={
+                        "memory_data": payload,
+                        "revision": MemoryRow.revision + 1,
+                        "updated_at": now,
+                    },
+                )
+                connection.execute(statement)
+            return True
+        except (SQLAlchemyError, ValueError):
+            logger.exception("Failed to save database-backed memory for user/agent scope")
             return False
 
 

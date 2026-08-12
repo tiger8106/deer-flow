@@ -17,7 +17,7 @@ Three-branch decision (see ``_decide_state``)
 |---------------------------------------|-----------------------------------------|
 | empty (no DeerFlow tables)            | ``create_all`` + ``alembic stamp head`` |
 | legacy (DeerFlow tables, no alembic)  | ``create_all`` (baseline tables only, as backfill) + ``stamp 0001_baseline`` + ``upgrade head`` |
-| versioned (``alembic_version`` row)   | ``alembic upgrade head``                |
+| versioned (``deerflow_alembic_version`` row) | ``alembic upgrade head``          |
 
 The legacy branch handles pre-alembic databases that already have at least one
 DeerFlow-owned table. ``create_all`` runs first because stamping at
@@ -90,6 +90,8 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+
+from deerflow.persistence.migrations.constants import LEGACY_VERSION_TABLE, VERSION_TABLE
 
 logger = logging.getLogger(__name__)
 
@@ -222,10 +224,35 @@ def _get_head_revision() -> str:
     return _HEAD_REVISION
 
 
+def _known_revision_ids() -> set[str]:
+    """Return every revision id in DeerFlow's migration graph."""
+    cfg = AlembicConfig()
+    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    return {revision.revision for revision in ScriptDirectory.from_config(cfg).walk_revisions()}
+
+
+def _adopt_legacy_version_table_sync(sync_conn: Any) -> bool:
+    """Rename the default version table only when it is provably DeerFlow's.
+
+    Tiger deploys multiple modules in one PostgreSQL database. A default
+    ``alembic_version`` may therefore belong to another module; an unknown
+    revision is deliberately left untouched.
+    """
+    reflected = set(sa_inspect(sync_conn).get_table_names())
+    if VERSION_TABLE in reflected or LEGACY_VERSION_TABLE not in reflected:
+        return False
+    rows = sync_conn.execute(text(f"SELECT version_num FROM {LEGACY_VERSION_TABLE}")).scalars().all()
+    if len(rows) != 1 or rows[0] not in _known_revision_ids():
+        return False
+    sync_conn.execute(text(f"ALTER TABLE {LEGACY_VERSION_TABLE} RENAME TO {VERSION_TABLE}"))
+    logger.info("bootstrap: adopted legacy migration version table as %s", VERSION_TABLE)
+    return True
+
+
 def _reflect_state(sync_conn: Any) -> dict[str, bool]:
     """Inspect *sync_conn* (sync connection inside ``run_sync``) and return:
 
-    - ``has_alembic_version``: bool
+    - ``has_alembic_version``: whether DeerFlow's independent version table exists
     - ``has_deerflow_tables``: True iff at least one table that ``Base.metadata``
       knows about is present in the DB. Computed as ``reflected ∩ metadata`` so
       the bootstrap layer never hardcodes a specific table or column name --
@@ -244,7 +271,7 @@ def _reflect_state(sync_conn: Any) -> dict[str, bool]:
     reflected = set(insp.get_table_names())
     metadata_tables = set(Base.metadata.tables)
     return {
-        "has_alembic_version": "alembic_version" in reflected,
+        "has_alembic_version": VERSION_TABLE in reflected,
         "has_deerflow_tables": bool(reflected & metadata_tables),
     }
 
@@ -411,6 +438,8 @@ async def bootstrap_schema(engine: AsyncEngine, *, backend: str) -> None:
     cfg = _get_alembic_config(engine)
 
     async with _bootstrap_lock(engine, backend=backend):
+        async with engine.begin() as conn:
+            await conn.run_sync(_adopt_legacy_version_table_sync)
         async with engine.connect() as conn:
             state = await conn.run_sync(_reflect_state)
         decision = _decide_state(state)

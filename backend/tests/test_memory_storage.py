@@ -4,14 +4,17 @@ import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import create_engine, select
 
 from deerflow.agents.memory.storage import (
     FileMemoryStorage,
     MemoryStorage,
+    PostgresMemoryStorage,
     create_empty_memory,
     get_memory_storage,
 )
 from deerflow.config.memory_config import MemoryConfig
+from deerflow.persistence.memory.model import MemoryRow
 
 
 class TestCreateEmptyMemory:
@@ -288,3 +291,58 @@ class TestGetMemoryStorage:
         with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="builtins.dict")):
             storage = get_memory_storage()
             assert isinstance(storage, FileMemoryStorage)
+
+
+class TestPostgresMemoryStorage:
+    @pytest.fixture
+    def storage(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        MemoryRow.__table__.create(engine)
+        yield PostgresMemoryStorage(engine=engine), engine
+        engine.dispose()
+
+    def test_round_trips_memory_without_mutating_caller(self, storage):
+        provider, engine = storage
+        payload = {"version": "1.0", "facts": [{"content": "database memory"}]}
+
+        assert provider.save(payload, user_id="user-1") is True
+        assert "lastUpdated" not in payload
+        assert provider.load(user_id="user-1")["facts"] == payload["facts"]
+
+        with engine.connect() as connection:
+            row = connection.execute(select(MemoryRow)).one()
+        assert row.revision == 1
+
+    def test_upsert_increments_revision_and_isolates_scopes(self, storage):
+        provider, engine = storage
+
+        assert provider.save({"facts": [{"content": "global"}]}, user_id="user-1")
+        assert provider.save(
+            {"facts": [{"content": "agent"}]},
+            "research-agent",
+            user_id="user-1",
+        )
+        assert provider.save({"facts": [{"content": "updated"}]}, user_id="user-1")
+
+        assert provider.load(user_id="user-1")["facts"][0]["content"] == "updated"
+        assert provider.load("research-agent", user_id="user-1")["facts"][0]["content"] == "agent"
+        assert provider.load(user_id="user-2")["facts"] == []
+
+        with engine.connect() as connection:
+            revisions = connection.execute(
+                select(MemoryRow.user_id, MemoryRow.agent_name, MemoryRow.revision)
+            ).all()
+        assert sorted(revisions) == [
+            ("user-1", "", 2),
+            ("user-1", "research-agent", 1),
+        ]
+
+    def test_import_payload_preserves_existing_timestamp(self, storage):
+        provider, _ = storage
+        payload = {
+            "lastUpdated": "2025-01-02T03:04:05Z",
+            "facts": [{"content": "preserved"}],
+        }
+
+        assert provider.import_payload(payload, user_id="user-1") is True
+        assert provider.load(user_id="user-1") == payload

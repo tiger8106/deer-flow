@@ -623,7 +623,9 @@ Focused regression coverage for the updater lives in `backend/tests/test_memory_
 
 ### Schema Migrations (`packages/harness/deerflow/persistence/migrations/`)
 
-DeerFlow's application tables (`runs`, `threads_meta`, `feedback`, `users`, `run_events`, plus the four `channel_*` tables) are owned by alembic via a **hybrid bootstrap** strategy. LangGraph's checkpointer tables (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`) live in the same database but are owned by LangGraph and excluded from alembic's view via `migrations/_env_filters.py::include_object`.
+DeerFlow's application tables (`runs`, `threads_meta`, `feedback`, `users`, `run_events`, long-term memory, plus the four `channel_*` tables) are owned by alembic via a **hybrid bootstrap** strategy. LangGraph's checkpointer tables (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`) live in the same database but are owned by LangGraph and excluded from alembic's view via `migrations/_env_filters.py::include_object`.
+
+DeerFlow always uses the independent `deerflow_alembic_version` table. Bootstrap may rename the legacy default `alembic_version` only when its sole revision belongs to DeerFlow; a foreign Knowledge or Access Control version table must be left untouched. This allows all three applications to share one PostgreSQL logical database safely.
 
 **Convention**: every ORM model change (new column, new table, new index) MUST ship as an alembic revision under `migrations/versions/`. The Gateway runs `alembic upgrade head` automatically on startup; users do not run `alembic` manually in production.
 
@@ -632,8 +634,8 @@ DeerFlow's application tables (`runs`, `threads_meta`, `feedback`, `users`, `run
 | DB state                                  | Action                                  |
 |-------------------------------------------|-----------------------------------------|
 | empty (no DeerFlow tables)                | `create_all` + `alembic stamp head`     |
-| legacy (DeerFlow tables, no `alembic_version`) | `create_all` (baseline tables only, backfill) + `alembic stamp 0001_baseline` + `upgrade head` |
-| versioned (`alembic_version` row exists)  | `alembic upgrade head`                  |
+| legacy (DeerFlow tables, no `deerflow_alembic_version`) | `create_all` (baseline tables only, backfill) + `alembic stamp 0001_baseline` + `upgrade head` |
+| versioned (`deerflow_alembic_version` row exists)  | `alembic upgrade head`                  |
 
 The legacy branch handles pre-alembic databases that already have at least one DeerFlow-owned table. `create_all` runs first because stamping at `0001_baseline` makes alembic skip the baseline's own `create_table` DDL on the subsequent upgrade — so any baseline table introduced into `Base.metadata` after the user's DB was first provisioned (e.g. the `channel_*` tables from PR #1930 for users upgrading across multiple releases) would otherwise never be created, and the first request hitting that table would 500 with `no such table`. The backfill is **restricted to `_BASELINE_TABLE_NAMES`** so it does not also create tables that future revisions introduce — those revisions' own `op.create_table` would otherwise fail with `relation already exists`. A guard test pins `_BASELINE_TABLE_NAMES` against `0001_baseline.upgrade()`'s actual output, so editing 0001 to add or remove a table forces a matching update to the constant. Column-level shape (pre-#3658 vs post-#3658 vs manual-ALTER for `token_usage_by_model`) is answered by each `versions/*.py` revision via the idempotent helpers in `migrations/_helpers.py` (`safe_add_column` / `safe_drop_column`) which no-op when the change is already present and `logger.warning` on shape drift. **Adding a new ORM column / table only requires a new revision file — no edit to `bootstrap.py` is needed** *unless* the new revision adds a new baseline table (rare; only happens when a new model is part of the baseline rather than introduced by its own revision).
 
@@ -649,12 +651,15 @@ This invokes `alembic revision --autogenerate` against the live ORM models. Revi
 
 **Where things live**:
 - `migrations/env.py` — alembic env, delegates filter to `_env_filters.py`, sets `render_as_batch=True` for SQLite ALTER support
+- `migrations/constants.py` — owns the independent DeerFlow version-table name and legacy-table compatibility constant
 - `migrations/_env_filters.py::include_object` — drops LangGraph checkpointer tables from alembic's view
 - `migrations/_helpers.py` — `safe_add_column` / `safe_drop_column`
 - `migrations/versions/0001_baseline.py` — chain root, matches the schema `create_all` produces from `Base.metadata`
 - `migrations/versions/0002_runs_token_usage.py` — fixes issue #3682
 - `migrations/versions/0005_run_stop_reason.py` through `0012_merge_tiger_admin.py` — keep the migration graph compatible with Tiger data created by the newer worktree; retain these revisions when reusing that data
+- `migrations/versions/0013_postgres_memory.py` — creates the database-backed long-term memory table
 - `persistence/bootstrap.py` — `bootstrap_schema(engine, backend=...)`, the three-branch decision + locking
+- `scripts/migrate_sqlite_to_postgres.py` — one-time, empty-target migration for application rows, LangGraph checkpoints/Store, and existing memory JSON files; it must pass all source/target validations before configuration switches to PostgreSQL
 - Tests: `tests/test_persistence_bootstrap.py` (branches), `tests/test_persistence_bootstrap_concurrency.py` (concurrency), `tests/test_persistence_bootstrap_regression.py` (issue #3682), `tests/test_persistence_migrations_env.py` (filter), `tests/blocking_io/test_persistence_bootstrap.py` (asyncio.to_thread anchor)
 
 ### Terminal Workbench / TUI (`packages/harness/deerflow/tui/`)

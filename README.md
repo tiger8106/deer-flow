@@ -808,6 +808,12 @@ Across sessions, DeerFlow builds a persistent memory of your profile, preference
 
 Memory updates now skip duplicate fact entries at apply time, so repeated preferences and context do not accumulate endlessly across sessions.
 
+For PostgreSQL deployments, set `memory.storage_class` to
+`deerflow.agents.memory.storage.PostgresMemoryStorage`. This keeps long-term
+memory in the same database as accounts, sessions, runs, and checkpoints. The
+`backend/scripts/migrate_sqlite_to_postgres.py` utility migrates the unified
+SQLite database and existing per-user memory JSON files before that switch.
+
 ## Recommended Models
 
 DeerFlow is model-agnostic — it works with any LLM that implements the OpenAI-compatible API. That said, it performs best with models that support:

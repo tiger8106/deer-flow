@@ -22,6 +22,7 @@ import sqlalchemy as sa
 
 import deerflow.persistence.models  # noqa: F401
 from deerflow.persistence.base import Base
+from deerflow.persistence.migrations.constants import VERSION_TABLE
 
 
 @pytest.fixture(scope="module")
@@ -71,8 +72,8 @@ def test_autogen_temp_db_is_at_head(autogen_module) -> None:
     url = autogen_module._build_temp_db_at_head()
     db_path = url.replace("sqlite+aiosqlite:///", "")
     with sqlite3.connect(db_path) as raw:
-        row = raw.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert row is not None, "autogen temp DB has no alembic_version row -- bootstrap failed"
+        row = raw.execute(f"SELECT version_num FROM {VERSION_TABLE}").fetchone()
+        assert row is not None, f"autogen temp DB has no {VERSION_TABLE} row -- bootstrap failed"
         # head is whatever the script tree currently says; we just assert it's there.
         assert row[0]
 

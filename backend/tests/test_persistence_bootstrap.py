@@ -5,12 +5,12 @@ Covers the three-branch decision table:
 | DB state                              | Action                                  |
 |---------------------------------------|-----------------------------------------|
 | empty                                 | create_all + stamp head                 |
-| legacy (DeerFlow tables, no alembic_version) | create_all (baseline tables only, backfill) + stamp baseline + upgrade head |
+| legacy (DeerFlow tables, no deerflow version table) | create_all (baseline tables only, backfill) + stamp baseline + upgrade head |
 | versioned                             | upgrade head                            |
 
 Each test seeds a temp SQLite to the relevant pre-state, runs
 ``bootstrap_schema``, and asserts both the resulting schema and the
-``alembic_version`` row.
+``deerflow_alembic_version`` row.
 
 The legacy branch is exercised across three scenarios: token-usage column
 missing, token-usage column already present, and a baseline-era table
@@ -41,13 +41,14 @@ from deerflow.persistence.bootstrap import (
     bootstrap_schema,
 )
 from deerflow.persistence.migrations._helpers import _normalize_default
+from deerflow.persistence.migrations.constants import LEGACY_VERSION_TABLE, VERSION_TABLE
 
 # Mark only async tests via the decorator below; module-level pytestmark would
 # spuriously warn for the sync ``TestDecideState`` cases.
 asyncio_test = pytest.mark.asyncio
 
 
-HEAD = "0005_first_user_admin"
+HEAD = "0013_postgres_memory"
 BASELINE = "0001_baseline"
 
 
@@ -81,7 +82,7 @@ async def _runs_index_names(engine) -> set[str]:
 
 async def _alembic_version(engine) -> str | None:
     async with engine.connect() as conn:
-        row = await conn.execute(sa.text("SELECT version_num FROM alembic_version"))
+        row = await conn.execute(sa.text(f"SELECT version_num FROM {VERSION_TABLE}"))
         return row.scalar()
 
 
@@ -142,7 +143,7 @@ async def test_empty_branch_creates_all_and_stamps_head(tmp_path: Path) -> None:
             "channel_credentials",
             "channel_conversations",
             "channel_oauth_states",
-            "alembic_version",
+            VERSION_TABLE,
         }:
             assert required in tables, f"missing table: {required}"
         assert "token_usage_by_model" in await _runs_columns(engine)
@@ -168,7 +169,7 @@ async def test_legacy_without_column_branch_upgrades(tmp_path: Path) -> None:
     try:
         await _seed_legacy_without_column(engine)
         assert "token_usage_by_model" not in await _runs_columns(engine)
-        assert "alembic_version" not in await _table_names(engine)
+        assert VERSION_TABLE not in await _table_names(engine)
 
         await bootstrap_schema(engine, backend="sqlite")
 
@@ -194,10 +195,10 @@ async def test_legacy_missing_channel_tables_get_backfilled(tmp_path: Path) -> N
         await _seed_legacy_missing_channel_tables(engine)
         tables = await _table_names(engine)
         # Sanity-check the seeded pre-state: ``runs`` triggers the legacy
-        # branch (has_deerflow_tables=True, no alembic_version) while the
+        # branch (has_deerflow_tables=True, no DeerFlow version table) while the
         # channel_* tables are absent.
         assert "runs" in tables
-        assert "alembic_version" not in tables
+        assert VERSION_TABLE not in tables
         for missing in {
             "channel_connections",
             "channel_credentials",
@@ -236,7 +237,7 @@ async def test_legacy_with_column_branch_upgrade_is_idempotent(tmp_path: Path) -
     try:
         await _seed_legacy_with_column(engine)
         assert "token_usage_by_model" in await _runs_columns(engine)
-        assert "alembic_version" not in await _table_names(engine)
+        assert VERSION_TABLE not in await _table_names(engine)
         cols_before = await _runs_columns(engine)
 
         await bootstrap_schema(engine, backend="sqlite")
@@ -404,6 +405,64 @@ async def test_versioned_branch_is_noop_at_head(tmp_path: Path) -> None:
         await engine.dispose()
 
 
+@asyncio_test
+async def test_known_legacy_version_table_is_adopted(tmp_path: Path) -> None:
+    engine = create_async_engine(_url(tmp_path))
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(
+                sa.text(
+                    f"CREATE TABLE {LEGACY_VERSION_TABLE} "
+                    "(version_num VARCHAR(64) NOT NULL)"
+                )
+            )
+            await conn.execute(
+                sa.text(
+                    f"INSERT INTO {LEGACY_VERSION_TABLE} (version_num) "
+                    "VALUES (:version)"
+                ),
+                {"version": HEAD},
+            )
+
+        await bootstrap_schema(engine, backend="sqlite")
+
+        tables = await _table_names(engine)
+        assert VERSION_TABLE in tables
+        assert LEGACY_VERSION_TABLE not in tables
+        assert await _alembic_version(engine) == HEAD
+    finally:
+        await engine.dispose()
+
+
+@asyncio_test
+async def test_foreign_legacy_version_table_is_not_adopted(tmp_path: Path) -> None:
+    engine = create_async_engine(_url(tmp_path))
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                sa.text(
+                    f"CREATE TABLE {LEGACY_VERSION_TABLE} "
+                    "(version_num VARCHAR(64) NOT NULL)"
+                )
+            )
+            await conn.execute(
+                sa.text(
+                    f"INSERT INTO {LEGACY_VERSION_TABLE} (version_num) "
+                    "VALUES ('knowledge_revision')"
+                )
+            )
+
+        await bootstrap_schema(engine, backend="sqlite")
+
+        tables = await _table_names(engine)
+        assert VERSION_TABLE in tables
+        assert LEGACY_VERSION_TABLE in tables
+        assert await _alembic_version(engine) == HEAD
+    finally:
+        await engine.dispose()
+
+
 # ---------------------------------------------------------------------------
 # Schema-parity guard: legacy-upgraded DB must end up structurally identical
 # to a fresh DB on the columns the migration touches. This is the property
@@ -466,11 +525,11 @@ def _reflect_columns_sync(sync_conn) -> dict[str, dict[str, dict]]:
     insp = sa.inspect(sync_conn)
     out: dict[str, dict[str, dict]] = {}
     for table in insp.get_table_names():
-        # ``alembic_version`` is alembic's own bookkeeping table, not part of
+        # DeerFlow's version table is alembic bookkeeping, not part of
         # our schema -- one path creates it (upgrade) and the other doesn't
         # (create_all), so comparing it would produce a guaranteed false
         # positive every run.
-        if table == "alembic_version":
+        if table == VERSION_TABLE:
             continue
         out[table] = {c["name"]: c for c in insp.get_columns(table)}
     return out
@@ -549,9 +608,9 @@ async def test_baseline_table_names_constant_matches_0001(tmp_path: Path) -> Non
 
         async with engine.connect() as conn:
             reflected = await conn.run_sync(lambda c: set(sa.inspect(c).get_table_names()))
-        # ``alembic_version`` is alembic's bookkeeping table, not part of
+        # DeerFlow's version table is alembic bookkeeping, not part of
         # our schema -- the constant is about DeerFlow-owned baseline tables.
-        reflected.discard("alembic_version")
+        reflected.discard(VERSION_TABLE)
 
         assert reflected == _BASELINE_TABLE_NAMES, f"_BASELINE_TABLE_NAMES drifted from 0001_baseline.upgrade()'s output: only-in-0001={sorted(reflected - _BASELINE_TABLE_NAMES)} only-in-constant={sorted(_BASELINE_TABLE_NAMES - reflected)}"
     finally:

@@ -24,11 +24,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 import deerflow.persistence.models  # noqa: F401
 from deerflow.persistence import bootstrap as bootstrap_mod
 from deerflow.persistence.bootstrap import bootstrap_schema
+from deerflow.persistence.migrations.constants import VERSION_TABLE
 
 pytestmark = pytest.mark.asyncio
 
 
-HEAD = "0005_first_user_admin"
+HEAD = "0013_postgres_memory"
 
 
 def _url(tmp_path: Path) -> str:
@@ -37,7 +38,7 @@ def _url(tmp_path: Path) -> str:
 
 async def _alembic_version(engine) -> str | None:
     async with engine.connect() as conn:
-        row = await conn.execute(sa.text("SELECT version_num FROM alembic_version"))
+        row = await conn.execute(sa.text(f"SELECT version_num FROM {VERSION_TABLE}"))
         return row.scalar()
 
 

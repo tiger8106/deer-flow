@@ -26,6 +26,7 @@ from deerflow.persistence.migrations._env_filters import (
     LANGGRAPH_OWNED_TABLES,
     include_object,
 )
+from deerflow.persistence.migrations.constants import VERSION_TABLE
 
 # Re-export under the module namespace for any consumer that addresses them
 # via ``env.LANGGRAPH_OWNED_TABLES`` / ``env.include_object``.
@@ -55,6 +56,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         render_as_batch=True,
         include_object=include_object,
+        version_table=VERSION_TABLE,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -66,6 +68,7 @@ def do_run_migrations(connection):
         target_metadata=target_metadata,
         render_as_batch=True,  # Required for SQLite ALTER TABLE support
         include_object=include_object,
+        version_table=VERSION_TABLE,
     )
     with context.begin_transaction():
         context.run_migrations()

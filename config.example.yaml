@@ -1387,6 +1387,9 @@ summarization:
 # Stores user context and conversation history for personalized responses
 memory:
   enabled: true
+  # Use deerflow.agents.memory.storage.PostgresMemoryStorage when the unified
+  # database backend is PostgreSQL and memory must survive worktree switches.
+  storage_class: deerflow.agents.memory.storage.FileMemoryStorage
   # Memory operation mode:
   #   middleware (default) - passive background extraction after each turn.
   #   tool - experimental opt-in; the model calls memory_search/memory_add/
