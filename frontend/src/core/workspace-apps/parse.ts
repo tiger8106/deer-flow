@@ -25,6 +25,12 @@ const workspaceAppSchema = z
           "en-US": z.string().min(1),
           "zh-CN": z.string().min(1),
         }),
+        partialLabel: z
+          .object({
+            "en-US": z.string().min(1),
+            "zh-CN": z.string().min(1),
+          })
+          .optional(),
       })
       .optional(),
   })

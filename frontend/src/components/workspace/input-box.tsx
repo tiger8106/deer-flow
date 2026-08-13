@@ -109,6 +109,8 @@ import {
 } from "@/core/voice-input/speech-recognition";
 import {
   buildComposerExtensionRunContext,
+  loadPersistedComposerExtensionSelections,
+  persistComposerExtensionScopes,
   type ComposerExtensionSelection,
 } from "@/core/workspace-apps/chat-input";
 import { useWorkspaceApps } from "@/core/workspace-apps/context";
@@ -411,6 +413,21 @@ export function InputBox({
   const lastGeneratedForAiIdRef = useRef<string | null>(null);
   const wasStreamingRef = useRef(false);
   const messagesRef = useRef(thread.messages);
+
+  useEffect(() => {
+    setComposerExtensions(loadPersistedComposerExtensionSelections(user?.id));
+  }, [user?.id]);
+
+  const handleComposerExtensionChange = useCallback(
+    (appId: string, selection: ComposerExtensionSelection) => {
+      setComposerExtensions((current) => ({
+        ...current,
+        [appId]: selection,
+      }));
+      persistComposerExtensionScopes(user?.id, appId, selection.scopes);
+    },
+    [user?.id],
+  );
 
   const clearVoiceRestartTimer = useCallback(() => {
     if (voiceRestartTimerRef.current === null) {
@@ -2289,10 +2306,7 @@ export function InputBox({
                 disabled={composerLocked}
                 value={composerExtensions[app.id]}
                 onChange={(selection) =>
-                  setComposerExtensions((current) => ({
-                    ...current,
-                    [app.id]: selection,
-                  }))
+                  handleComposerExtensionChange(app.id, selection)
                 }
               />
             ))}

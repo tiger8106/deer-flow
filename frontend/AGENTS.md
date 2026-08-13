@@ -125,8 +125,13 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   source must not add an application-specific route, label, or icon branch.
   Optional `chatInput` configuration exposes a generic composer scope picker;
   its endpoint returns generic collection/document nodes and its selection is
-  sent as opaque run-scoped `context.extensions[app_id]` data. Authorization and
-  interpretation stay in the external application.
+  stored per signed-in user in browser localStorage. An enabled selection or a
+  disabled selection with explicit scopes is sent as opaque run-scoped
+  `context.extensions[app_id]` data, so an external application can distinguish
+  forcing its mode from constraining an automatically detected operation. The
+  enabled switch is intentionally not restored. Deployments may provide a
+  localized `chatInput.partialLabel` for mixed scope selections. Authorization
+  and interpretation stay in the external application.
 
 - `DEER_FLOW_TOOL_DISPLAY_LABELS` is a deployment-owned JSON object mapping
   opaque tool identifiers to localized user-facing labels. The frontend uses

@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+const composerScopeRefSchema = z.object({
+  kind: z.enum(["collection", "document"]),
+  id: z.string().min(1).max(200),
+});
+
+const persistedComposerScopesSchema = z.record(
+  z.string().min(1).max(100),
+  z.array(composerScopeRefSchema).max(200),
+);
+
+const COMPOSER_EXTENSION_SCOPES_KEY_PREFIX =
+  "deerflow.composer-extension-scopes.";
+
 export const composerScopeNodeSchema: z.ZodType<ComposerScopeNode> = z.lazy(
   () =>
     z.object({
@@ -57,6 +70,62 @@ export type ComposerExtensionSelection = {
 
 export type ComposerScopeRef = Pick<ComposerScopeNode, "kind" | "id">;
 
+function isBrowser() {
+  return typeof window !== "undefined";
+}
+
+function persistedComposerScopesKey(userId: string) {
+  return `${COMPOSER_EXTENSION_SCOPES_KEY_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+function readPersistedComposerScopes(
+  userId: string,
+): Record<string, ComposerScopeRef[]> {
+  if (!isBrowser()) return {};
+  try {
+    const raw = window.localStorage.getItem(persistedComposerScopesKey(userId));
+    if (!raw) return {};
+    return persistedComposerScopesSchema.parse(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+export function loadPersistedComposerExtensionSelections(
+  userId: string | null | undefined,
+): Record<string, ComposerExtensionSelection> {
+  if (!userId) return {};
+  return Object.fromEntries(
+    Object.entries(readPersistedComposerScopes(userId)).map(
+      ([appId, scopes]) => [appId, { enabled: false, scopes }],
+    ),
+  );
+}
+
+export function persistComposerExtensionScopes(
+  userId: string | null | undefined,
+  appId: string,
+  scopes: ComposerScopeRef[],
+) {
+  if (!userId || !isBrowser() || !/^[a-z0-9][a-z0-9-]*$/.test(appId)) {
+    return;
+  }
+  const parsedScopes = z
+    .array(composerScopeRefSchema)
+    .max(200)
+    .safeParse(scopes);
+  if (!parsedScopes.success) return;
+  try {
+    window.localStorage.setItem(
+      persistedComposerScopesKey(userId),
+      JSON.stringify({
+        ...readPersistedComposerScopes(userId),
+        [appId]: parsedScopes.data,
+      }),
+    );
+  } catch {}
+}
+
 function scopeKey(scope: ComposerScopeRef) {
   return `${scope.kind}:${scope.id}`;
 }
@@ -89,8 +158,10 @@ function scopeCoversTarget(
   return scopes.some((scope) => {
     if (scopeKey(scope) === scopeKey(target)) return true;
     const selectedNode = findScopeNode(nodes, scope);
-    return selectedNode?.kind === "collection" &&
-      nodeContainsScope(selectedNode, target);
+    return (
+      selectedNode?.kind === "collection" &&
+      nodeContainsScope(selectedNode, target)
+    );
   });
 }
 
@@ -117,6 +188,28 @@ export function groupComposerScopeNodes(
       (left.order ?? Number.MAX_SAFE_INTEGER) -
       (right.order ?? Number.MAX_SAFE_INTEGER),
   );
+}
+
+export function getComposerScopeSelectionLabel(
+  nodes: ComposerScopeNode[],
+  scopes: ComposerScopeRef[],
+  allLabel: string,
+  partialLabel: string,
+) {
+  if (scopes.length === 0) return allLabel;
+
+  const selected = new Set(scopes.map(scopeKey));
+  for (const group of groupComposerScopeNodes(nodes)) {
+    if (!group.label) continue;
+    const groupSelection = toggleComposerScopeGroup([], group.nodes);
+    if (
+      groupSelection.length === selected.size &&
+      groupSelection.every((scope) => selected.has(scopeKey(scope)))
+    ) {
+      return group.label;
+    }
+  }
+  return partialLabel;
 }
 
 export function getComposerScopeGroupState(
@@ -188,7 +281,11 @@ export function toggleComposerScopeGroup(
 
   return groupNodes.reduce(
     (current, node) =>
-      toggleComposerScope(current, { kind: node.kind, id: node.id }, groupNodes),
+      toggleComposerScope(
+        current,
+        { kind: node.kind, id: node.id },
+        groupNodes,
+      ),
     retained,
   );
 }
@@ -255,7 +352,9 @@ export function buildComposerExtensionRunContext(
   selections: Record<string, ComposerExtensionSelection>,
 ): Record<string, unknown> {
   const active = Object.fromEntries(
-    Object.entries(selections).filter(([, selection]) => selection.enabled),
+    Object.entries(selections).filter(
+      ([, selection]) => selection.enabled || selection.scopes.length > 0,
+    ),
   );
   return Object.keys(active).length > 0 ? { extensions: active } : {};
 }

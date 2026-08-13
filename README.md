@@ -145,10 +145,13 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    and opens it in the same-sized floating dialog, while `requiredSystemRole`
    gates its navigation entry and server route.
    An application may additionally provide `chatInput.scopeEndpoint` plus
-   localized `chatInput.labels` and `chatInput.allLabel` values. The composer then renders a generic
-   scope tree and forwards the active selection as opaque, run-scoped
-   `context.extensions[app_id]` data; the application remains responsible for
-   authorization, scope semantics, and tool behavior.
+   localized `chatInput.labels`, `chatInput.allLabel`, and optional
+   `chatInput.partialLabel` values. The composer renders a generic scope tree,
+   keeps its scope selection per signed-in user in browser storage, and forwards
+   an enabled extension or a non-empty scope selection as opaque, run-scoped
+   `context.extensions[app_id]` data. The enabled switch itself is not restored
+   across composer mounts; the application remains responsible for authorization,
+   scope semantics, and tool behavior.
 
    A deployment may also set `DEER_FLOW_RUN_POLICY_URL` and
    `DEER_FLOW_RUN_POLICY_TOKEN` to apply an external admission and terminal

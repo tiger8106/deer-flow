@@ -13,6 +13,10 @@ const knowledgeApp = {
     scopeEndpoint: "/api/knowledge/api/v1/chat/retrieval-scopes",
     labels: { "en-US": "Knowledge Base", "zh-CN": "知识库" },
     allLabel: { "en-US": "All knowledge bases", "zh-CN": "全部知识库" },
+    partialLabel: {
+      "en-US": "Some knowledge bases",
+      "zh-CN": "部分知识库",
+    },
   },
 };
 

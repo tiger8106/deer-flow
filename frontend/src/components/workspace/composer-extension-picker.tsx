@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useI18n } from "@/core/i18n/hooks";
 import {
-  findComposerScopeLabel,
   getComposerScopeGroupState,
+  getComposerScopeSelectionLabel,
   getSelectedScopeExpansion,
   groupComposerScopeNodes,
   parseComposerScopeResponse,
@@ -33,6 +33,7 @@ import {
 import {
   getWorkspaceAppAllScopeLabel,
   getWorkspaceAppChatInputLabel,
+  getWorkspaceAppPartialScopeLabel,
   type WorkspaceApp,
 } from "@/core/workspace-apps/types";
 import { cn } from "@/lib/utils";
@@ -69,9 +70,10 @@ export function ComposerExtensionPicker({
   const config = app.chatInput;
   const appLabel = getWorkspaceAppChatInputLabel(app, locale);
   const allLabel = getWorkspaceAppAllScopeLabel(app, locale);
+  const configuredPartialLabel = getWorkspaceAppPartialScopeLabel(app, locale);
 
   useEffect(() => {
-    if (!open || !config || nodes.length > 0) return;
+    if (!config || nodes.length > 0) return;
     const controller = new AbortController();
     setLoading(true);
     setLoadError(false);
@@ -91,20 +93,30 @@ export function ComposerExtensionPicker({
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [config, nodes.length, open, reloadKey]);
+  }, [config, nodes.length, reloadKey]);
 
   const scopes = useMemo(() => value?.scopes ?? [], [value?.scopes]);
   const scopeGroups = useMemo(() => groupComposerScopeNodes(nodes), [nodes]);
   const selectedLabel = useMemo(() => {
-    if (scopes.length === 0) return allLabel;
-    if (scopes.length === 1 && scopes[0]) {
-      return findComposerScopeLabel(nodes, scopes[0]) ?? appLabel;
-    }
-    return t.inputBox.composerScopesSelected.replace(
-      "{count}",
-      String(scopes.length),
+    const partialLabel =
+      configuredPartialLabel ??
+      t.inputBox.composerScopesSelected.replace(
+        "{count}",
+        String(scopes.length),
+      );
+    return getComposerScopeSelectionLabel(
+      nodes,
+      scopes,
+      allLabel,
+      partialLabel,
     );
-  }, [allLabel, appLabel, nodes, scopes, t.inputBox.composerScopesSelected]);
+  }, [
+    allLabel,
+    configuredPartialLabel,
+    nodes,
+    scopes,
+    t.inputBox.composerScopesSelected,
+  ]);
 
   useEffect(() => {
     if (!open || nodes.length === 0) return;
@@ -137,8 +149,7 @@ export function ComposerExtensionPicker({
     });
   };
 
-  const nodeLabelKey = (node: ComposerScopeNode) =>
-    `${node.kind}:${node.id}`;
+  const nodeLabelKey = (node: ComposerScopeNode) => `${node.kind}:${node.id}`;
 
   const cancelPendingNodeLabelClick = (node: ComposerScopeNode) => {
     const key = nodeLabelKey(node);
@@ -364,7 +375,7 @@ export function ComposerExtensionPicker({
       <div className="flex min-w-0 items-center">
         <PromptInputButton
           className={cn(
-            "max-w-28 gap-1 rounded-r-none border-r-0 px-2!",
+            "max-w-32 gap-1 rounded-r-none border-r-0 px-2!",
             value?.enabled && "bg-accent text-accent-foreground",
           )}
           disabled={disabled}
@@ -378,7 +389,7 @@ export function ComposerExtensionPicker({
           }
         >
           <BookOpenIcon className="size-3" />
-          <span className="truncate text-xs font-normal">{appLabel}</span>
+          <span className="truncate text-xs font-normal">{selectedLabel}</span>
         </PromptInputButton>
         <DropdownMenuTrigger asChild>
           <PromptInputButton

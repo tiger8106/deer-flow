@@ -19,6 +19,10 @@ export type WorkspaceApp = {
       "en-US": string;
       "zh-CN": string;
     };
+    partialLabel?: {
+      "en-US": string;
+      "zh-CN": string;
+    };
   };
 };
 
@@ -51,5 +55,14 @@ export function getWorkspaceAppAllScopeLabel(
 ): string {
   const labels = app.chatInput?.allLabel;
   if (!labels) return getWorkspaceAppLabel(app, locale);
+  return locale.startsWith("zh") ? labels["zh-CN"] : labels["en-US"];
+}
+
+export function getWorkspaceAppPartialScopeLabel(
+  app: WorkspaceApp,
+  locale: string,
+): string | null {
+  const labels = app.chatInput?.partialLabel;
+  if (!labels) return null;
   return locale.startsWith("zh") ? labels["zh-CN"] : labels["en-US"];
 }
