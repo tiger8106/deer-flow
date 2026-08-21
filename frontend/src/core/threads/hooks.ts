@@ -192,6 +192,13 @@ function messageIdentity(message: Message): string | undefined {
   return undefined;
 }
 
+function messageSeq(message: Message): number | undefined {
+  const value = message.additional_kwargs?.deerflow_seq;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
 function dedupeMessagesByIdentity(messages: Message[]): Message[] {
   const lastIndexByIdentity = new Map<string, number>();
   const lastVisibleIndexByIdentity = new Map<string, number>();
@@ -310,10 +317,19 @@ export function buildVisibleHistoryMessages(
     // Carry the owning run_id onto the content message so historical subtask
     // cards can fetch their persisted step history on expand (#3779). run_id
     // lives on the RunMessage wrapper and would otherwise be dropped here.
-    ...visibleRows.map((message) => ({
-      ...message.content,
-      run_id: message.run_id,
-    })),
+    ...visibleRows.map((message) => {
+      const content = {
+        ...message.content,
+        run_id: message.run_id,
+      } as unknown as Message;
+      if (typeof message.seq === "number") {
+        content.additional_kwargs = {
+          ...content.additional_kwargs,
+          deerflow_seq: message.seq,
+        };
+      }
+      return content;
+    }),
     ...appendedMessages,
   ]);
 }
@@ -393,6 +409,46 @@ export function buildRunMessagesUrl(
   return normalizedBaseUrl ? url.toString() : `${url.pathname}${url.search}`;
 }
 
+export type ThreadMessagesPageResponse = {
+  data: RunMessage[];
+  has_more?: boolean;
+  hasMore?: boolean;
+  next_before_seq?: number | null;
+};
+
+export function threadMessagesPageHasMore(result: ThreadMessagesPageResponse) {
+  return result.has_more ?? result.hasMore ?? false;
+}
+
+export function getNextThreadMessagesBeforeSeq(
+  result: ThreadMessagesPageResponse,
+): number | null | undefined {
+  if (!threadMessagesPageHasMore(result)) {
+    return null;
+  }
+  if (typeof result.next_before_seq === "number") {
+    return result.next_before_seq;
+  }
+  return getOldestRunMessageSeq(result.data) ?? undefined;
+}
+
+export function buildThreadMessagesUrl(
+  baseUrl: string,
+  threadId: string,
+  beforeSeq?: number,
+) {
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+  const path = `/api/threads/${encodeURIComponent(threadId)}/messages/page`;
+  const url = new URL(
+    `${normalizedBaseUrl}${path}`,
+    typeof window !== "undefined" ? window.location.origin : "http://localhost",
+  );
+  if (beforeSeq !== undefined) {
+    url.searchParams.set("before_seq", String(beforeSeq));
+  }
+  return normalizedBaseUrl ? url.toString() : `${url.pathname}${url.search}`;
+}
+
 export function mergeMessages(
   historyMessages: Message[],
   threadMessages: Message[],
@@ -421,6 +477,63 @@ export function mergeMessages(
       .filter(isNonEmptyString),
   );
 
+  // A checkpoint can retain messages that are older than the first loaded
+  // history page after context compaction.  Values frames carry the persisted
+  // thread seq, so keep those messages before the paged window instead of
+  // appending them after the latest history page.
+  const historySeqByIdentity = new Map<string, number>();
+  for (const message of historyMessages) {
+    const identity = messageIdentity(message);
+    const seq = messageSeq(message);
+    if (identity && seq !== undefined && !historySeqByIdentity.has(identity)) {
+      historySeqByIdentity.set(identity, seq);
+    }
+  }
+  const threadMessagesWithSeq = threadMessages.map((message) => {
+    if (messageSeq(message) !== undefined) {
+      return message;
+    }
+    const identity = messageIdentity(message);
+    const seq = identity ? historySeqByIdentity.get(identity) : undefined;
+    if (seq === undefined) {
+      return message;
+    }
+    return {
+      ...message,
+      additional_kwargs: {
+        ...message.additional_kwargs,
+        deerflow_seq: seq,
+      },
+    } as Message;
+  });
+  const canonicalMinSeq = historyMessages.reduce<number | undefined>(
+    (minimum, message) => {
+      const seq = messageSeq(message);
+      if (seq === undefined) {
+        return minimum;
+      }
+      return minimum === undefined ? seq : Math.min(minimum, seq);
+    },
+    undefined,
+  );
+  const messagesBeforeHistoryWindow =
+    canonicalMinSeq === undefined
+      ? []
+      : threadMessagesWithSeq
+          .filter((message) => {
+            const seq = messageSeq(message);
+            return seq !== undefined && seq < canonicalMinSeq;
+          })
+          .sort((left, right) => messageSeq(left)! - messageSeq(right)!);
+  const messagesInHistoryWindow = threadMessagesWithSeq.filter((message) => {
+    const seq = messageSeq(message);
+    return (
+      canonicalMinSeq === undefined ||
+      seq === undefined ||
+      seq >= canonicalMinSeq
+    );
+  });
+
   // The overlap is a contiguous suffix of historyMessages (newest history == oldest thread).
   // Scan from the end: shrink cutoff while messages are already in thread, stop as soon as
   // we hit one that isn't — everything before that point is non-overlapping.
@@ -439,8 +552,9 @@ export function mergeMessages(
   }
 
   const merged = dedupeMessagesByIdentity([
+    ...messagesBeforeHistoryWindow,
     ...historyMessages.slice(0, cutoff),
-    ...threadMessages,
+    ...messagesInHistoryWindow,
     ...optimisticMessages,
   ]);
 
@@ -1602,15 +1716,11 @@ export function useThreadHistory(
 ) {
   const runs = useThreadRuns(threadId, { enabled });
   const threadIdRef = useRef(threadId);
-  const runsRef = useRef(runs.data ?? []);
-  const indexRef = useRef(-1);
   const loadingRef = useRef(false);
-  const pendingLoadRef = useRef(false);
-  const loadingRunIdRef = useRef<string | null>(null);
-  const loadedRunIdsRef = useRef<Set<string>>(new Set());
-  const runBeforeSeqRef = useRef<Map<string, number>>(new Map());
+  const beforeSeqRef = useRef<number | null | undefined>(undefined);
   const loadGenerationRef = useRef(0);
   const [loading, setLoading] = useState(false);
+  const [hasMorePages, setHasMorePages] = useState(true);
   const [messageRows, setMessageRows] = useState<RunMessage[]>([]);
   const [appendedMessages, setAppendedMessages] = useState<Message[]>([]);
 
@@ -1627,22 +1737,11 @@ export function useThreadHistory(
   }, [appendedMessages, messageRows, supersededRunIds]);
 
   const loadMessages = useCallback(async () => {
-    if (!enabled) {
+    if (!enabled || !threadIdRef.current) {
       return;
     }
     const loadGeneration = loadGenerationRef.current;
-    if (loadingRef.current) {
-      const pendingRunIndex = findLatestUnloadedRunIndex(
-        runsRef.current,
-        loadedRunIdsRef.current,
-      );
-      const pendingRun = runsRef.current[pendingRunIndex];
-      if (pendingRun && pendingRun.run_id !== loadingRunIdRef.current) {
-        pendingLoadRef.current = true;
-      }
-      return;
-    }
-    if (runsRef.current.length === 0) {
+    if (loadingRef.current || beforeSeqRef.current === null) {
       return;
     }
 
@@ -1650,86 +1749,62 @@ export function useThreadHistory(
     setLoading(true);
 
     try {
-      let consecutiveEmptyLoads = 0;
-      do {
-        pendingLoadRef.current = false;
+      const requestThreadId = threadIdRef.current;
+      const beforeSeq = beforeSeqRef.current ?? undefined;
+      const url = buildThreadMessagesUrl(
+        getBackendBaseURL(),
+        requestThreadId,
+        beforeSeq,
+      );
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load thread history (${response.status})`);
+      }
+      const result = (await response.json()) as ThreadMessagesPageResponse;
+      if (!Array.isArray(result.data)) {
+        throw new Error("Thread history response did not contain a data array");
+      }
+      if (
+        loadGenerationRef.current !== loadGeneration ||
+        threadIdRef.current !== requestThreadId
+      ) {
+        return;
+      }
 
-        const nextRunIndex = findLatestUnloadedRunIndex(
-          runsRef.current,
-          loadedRunIdsRef.current,
-        );
-        indexRef.current = nextRunIndex;
+      const historicalMessages = result.data.filter(
+        (message) => !message.metadata?.caller?.startsWith("middleware:"),
+      );
+      const nextBeforeSeq = getNextThreadMessagesBeforeSeq(result);
+      if (typeof nextBeforeSeq === "number") {
+        if (beforeSeq !== undefined && nextBeforeSeq >= beforeSeq) {
+          throw new Error("Thread history cursor did not move backwards");
+        }
+        beforeSeqRef.current = nextBeforeSeq;
+        setHasMorePages(true);
+      } else if (nextBeforeSeq === null) {
+        beforeSeqRef.current = null;
+        setHasMorePages(false);
+      } else {
+        throw new Error("Thread history page has_more without a valid cursor");
+      }
 
-        const run = runsRef.current[nextRunIndex];
-        if (!run) {
-          indexRef.current = -1;
-          return;
-        }
-
-        const requestThreadId = threadIdRef.current;
-        loadingRunIdRef.current = run.run_id;
-        const beforeSeq = runBeforeSeqRef.current.get(run.run_id);
-        const url = buildRunMessagesUrl(
-          getBackendBaseURL(),
-          requestThreadId,
-          run.run_id,
-          beforeSeq,
-        );
-        const result: RunMessagesPageResponse = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-        }).then((res) => {
-          return res.json();
-        });
-        if (
-          loadGenerationRef.current !== loadGeneration ||
-          threadIdRef.current !== requestThreadId
-        ) {
-          return;
-        }
-        const _messages = result.data.filter(
-          (m) => !m.metadata.caller?.startsWith("middleware:"),
-        );
-        setMessageRows((prev) =>
-          dedupeRunMessagesByIdentity([..._messages, ...prev]),
-        );
-        const nextBeforeSeq = getNextRunMessagesBeforeSeq(result);
-        if (typeof nextBeforeSeq === "number") {
-          runBeforeSeqRef.current.set(run.run_id, nextBeforeSeq);
-          pendingLoadRef.current = true;
-        } else if (nextBeforeSeq === undefined) {
-          console.warn(
-            `Run ${run.run_id} returned has_more without message seq values; leaving it pending for retry.`,
-          );
-        } else {
-          runBeforeSeqRef.current.delete(run.run_id);
-          loadedRunIdsRef.current.add(run.run_id);
-          if (
-            shouldAutoContinueOnEmptyRun(
-              _messages.length,
-              consecutiveEmptyLoads,
-            )
-          ) {
-            consecutiveEmptyLoads += 1;
-            pendingLoadRef.current = true;
-          } else {
-            consecutiveEmptyLoads = 0;
-          }
-        }
-        indexRef.current = findLatestUnloadedRunIndex(
-          runsRef.current,
-          loadedRunIdsRef.current,
-        );
-      } while (pendingLoadRef.current);
-    } catch (err) {
-      console.error(err);
+      setMessageRows((previous) =>
+        dedupeRunMessagesByIdentity([...historicalMessages, ...previous]),
+      );
+    } catch (error) {
+      console.error("Failed to load thread history", error);
+      if (loadGenerationRef.current === loadGeneration) {
+        toast.error("Failed to load thread history.");
+      }
     } finally {
       if (loadGenerationRef.current === loadGeneration) {
         loadingRef.current = false;
-        loadingRunIdRef.current = null;
         setLoading(false);
       }
     }
@@ -1740,14 +1815,10 @@ export function useThreadHistory(
 
     if (!enabled || threadChanged) {
       loadGenerationRef.current += 1;
-      runsRef.current = [];
-      indexRef.current = -1;
-      pendingLoadRef.current = false;
-      loadingRunIdRef.current = null;
-      loadedRunIdsRef.current = new Set();
-      runBeforeSeqRef.current = new Map();
+      beforeSeqRef.current = undefined;
       loadingRef.current = false;
       setLoading(false);
+      setHasMorePages(true);
       setMessageRows([]);
       setAppendedMessages([]);
     }
@@ -1756,17 +1827,8 @@ export function useThreadHistory(
       return;
     }
 
-    if (runs.data && runs.data.length > 0) {
-      runsRef.current = runs.data ?? [];
-      indexRef.current = findLatestUnloadedRunIndex(
-        runs.data,
-        loadedRunIdsRef.current,
-      );
-    }
-    loadMessages().catch(() => {
-      toast.error("Failed to load thread history.");
-    });
-  }, [enabled, threadId, runs.data, loadMessages]);
+    void loadMessages();
+  }, [enabled, threadId, loadMessages]);
 
   const appendMessages = useCallback((_messages: Message[]) => {
     setAppendedMessages((prev) => {
@@ -1774,21 +1836,14 @@ export function useThreadHistory(
     });
   }, []);
   const hasThreadId = Boolean(threadId);
-  const hasUnloadedRuns = Boolean(
-    runs.data?.some((run) => !loadedRunIdsRef.current.has(run.run_id)),
-  );
-  const isRunsLoading =
-    enabled &&
-    hasThreadId &&
-    (runs.isLoading || (runs.isFetching && !runs.data));
-  const isRunsUnresolved =
-    enabled && hasThreadId && !runs.data && !runs.isError;
-  const hasMore =
-    enabled && hasThreadId && (indexRef.current >= 0 || hasUnloadedRuns);
+  const hasMore = enabled && hasThreadId && hasMorePages;
   return {
     runs: runs.data,
     messages,
-    loading: loading || isRunsLoading || isRunsUnresolved,
+    // Message content is paged from the thread feed directly.  Do not block
+    // it on the separate run-list query, which is needed only to hide
+    // superseded regenerated runs and may be slower on long conversations.
+    loading,
     appendMessages,
     hasMore,
     loadMore: loadMessages,

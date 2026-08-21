@@ -28,6 +28,7 @@ from langgraph.checkpoint.base import empty_checkpoint
 
 from deerflow.agents.goal_state import GoalEvaluation, GoalState
 from deerflow.config.app_config import AppConfig
+from deerflow.runtime.events.message_seq import MessageSeqStamper
 from deerflow.runtime.goal import (
     DEFAULT_MAX_GOAL_CONTINUATIONS,
     DEFAULT_MAX_NO_PROGRESS_CONTINUATIONS,
@@ -446,6 +447,15 @@ async def run_agent(
                 )
             return goal_evaluator_model
 
+        seq_stamper = MessageSeqStamper(event_store, thread_id) if event_store is not None else None
+
+        async def _serialize_stream_values(value: Any) -> Any:
+            """Serialize a values frame and preserve its thread-feed positions."""
+            payload = serialize(value, mode="values")
+            if seq_stamper is None:
+                return payload
+            return await seq_stamper.stamp(payload)
+
         async def _stream_once(input_payload: Any, stream_config: RunnableConfig) -> None:
             nonlocal llm_error_fallback_message
             if len(lg_modes) == 1 and not stream_subgraphs:
@@ -457,7 +467,12 @@ async def run_agent(
                         break
                     llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, pre_existing_message_ids)
                     sse_event = _lg_mode_to_sse_event(single_mode)
-                    await bridge.publish(run_id, sse_event, serialize(chunk, mode=single_mode))
+                    payload = (
+                        await _serialize_stream_values(chunk)
+                        if single_mode == "values"
+                        else serialize(chunk, mode=single_mode)
+                    )
+                    await bridge.publish(run_id, sse_event, payload)
                     if single_mode == "custom":
                         await subagent_events.add(chunk)
                 return
@@ -478,7 +493,12 @@ async def run_agent(
 
                 llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, pre_existing_message_ids)
                 sse_event = _lg_mode_to_sse_event(mode)
-                await bridge.publish(run_id, sse_event, serialize(chunk, mode=mode))
+                payload = (
+                    await _serialize_stream_values(chunk)
+                    if mode == "values"
+                    else serialize(chunk, mode=mode)
+                )
+                await bridge.publish(run_id, sse_event, payload)
                 if mode == "custom":
                     await subagent_events.add(chunk)
 

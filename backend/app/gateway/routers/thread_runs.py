@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
 from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_store, get_stream_bridge
-from app.gateway.pagination import trim_run_message_page
+from app.gateway.pagination import trim_message_page, trim_run_message_page
 from app.gateway.services import sse_consumer, start_run, wait_for_run_completion
 from deerflow.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
 from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY, get_original_user_content_text, message_to_text
@@ -677,6 +677,42 @@ async def list_thread_messages(
                     content["additional_kwargs"]["turn_duration"] = run_durations[rid]
 
     return messages
+
+
+@router.get("/{thread_id}/messages/page")
+@require_permission("runs", "read", owner_check=True)
+async def list_thread_messages_page(
+    thread_id: str,
+    request: Request,
+    limit: int = Query(default=100, le=200, ge=1),
+    before_seq: int | None = Query(default=None, ge=1),
+    after_seq: int | None = Query(default=None, ge=1),
+) -> dict:
+    """Return one globally ordered page of messages for a thread.
+
+    Run-local pagination cannot represent a compacted conversation reliably:
+    the newest 100 runs are not the same thing as the oldest visible message
+    in the thread.  The event store already assigns one monotonic sequence per
+    thread, so history uses that cursor directly and never needs to enumerate
+    runs first.
+    """
+    event_store = get_run_event_store(request)
+    rows = await event_store.list_messages(
+        thread_id,
+        limit=limit + 1,
+        before_seq=before_seq,
+        after_seq=after_seq,
+    )
+    data, has_more = trim_message_page(rows, limit=limit, after_seq=after_seq)
+
+    # ``data`` is ascending.  For backwards pagination the first item is the
+    # next exclusive cursor.  Forward callers do not use this cursor.
+    next_before_seq = data[0].get("seq") if has_more and data and after_seq is None else None
+    return {
+        "data": data,
+        "has_more": has_more,
+        "next_before_seq": next_before_seq,
+    }
 
 
 @router.get("/{thread_id}/runs/{run_id}/messages")

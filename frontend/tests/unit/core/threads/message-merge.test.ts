@@ -3,10 +3,12 @@ import { expect, test } from "@rstest/core";
 
 import {
   buildRunMessagesUrl,
+  buildThreadMessagesUrl,
   buildVisibleHistoryMessages,
   computeSummarizationMovedMessages,
   findLatestUnloadedRunIndex,
   getNextRunMessagesBeforeSeq,
+  getNextThreadMessagesBeforeSeq,
   getOldestRunMessageSeq,
   getSupersededRunIds,
   getSummarizationMiddlewareMessages,
@@ -18,6 +20,7 @@ import {
   resolvePreservedHistory,
   runMessagesPageHasMore,
   shouldAutoContinueOnEmptyRun,
+  threadMessagesPageHasMore,
 } from "@/core/threads/hooks";
 import type { RunMessage } from "@/core/threads/types";
 
@@ -71,6 +74,26 @@ test("mergeMessages lets live thread messages replace overlapping history", () =
   expect(mergeMessages([oldHuman, oldAi], [liveHuman, liveAi], [])).toEqual([
     liveHuman,
     liveAi,
+  ]);
+});
+
+test("mergeMessages places compacted live messages before the loaded history window", () => {
+  const oldLive = {
+    id: "human-old",
+    type: "human",
+    content: "old question",
+    additional_kwargs: { deerflow_seq: 3 },
+  } as Message;
+  const recentHistory = {
+    id: "ai-recent",
+    type: "ai",
+    content: "recent answer",
+    additional_kwargs: { deerflow_seq: 12 },
+  } as Message;
+
+  expect(mergeMessages([recentHistory], [oldLive], [])).toEqual([
+    oldLive,
+    recentHistory,
   ]);
 });
 
@@ -288,6 +311,22 @@ test("runMessagesPageHasMore keeps compatibility with camelCase pagination field
   expect(runMessagesPageHasMore({ data: [], hasMore: true })).toBe(true);
 });
 
+test("thread history pagination uses the explicit global cursor", () => {
+  expect(
+    threadMessagesPageHasMore({ data: [], has_more: true, next_before_seq: 7 }),
+  ).toBe(true);
+  expect(
+    getNextThreadMessagesBeforeSeq({
+      data: [runMessage(5)],
+      has_more: true,
+      next_before_seq: 7,
+    }),
+  ).toBe(7);
+  expect(
+    getNextThreadMessagesBeforeSeq({ data: [], has_more: false }),
+  ).toBeNull();
+});
+
 test("getOldestRunMessageSeq returns the cursor for the next older run page", () => {
   expect(
     getOldestRunMessageSeq([runMessage(8), runMessage(9), runMessage(10)]),
@@ -332,6 +371,12 @@ test("buildRunMessagesUrl omits before_seq when loading the latest page", () => 
 test("buildRunMessagesUrl returns a relative URL when using the nginx proxy", () => {
   expect(buildRunMessagesUrl("", "thread-1", "run-1", 42)).toBe(
     "/api/threads/thread-1/runs/run-1/messages?before_seq=42",
+  );
+});
+
+test("buildThreadMessagesUrl encodes the thread and optional cursor", () => {
+  expect(buildThreadMessagesUrl("", "thread/with space", 42)).toBe(
+    "/api/threads/thread%2Fwith%20space/messages/page?before_seq=42",
   );
 });
 
@@ -474,6 +519,24 @@ test("buildVisibleHistoryMessages attaches run_id to each content message (#3779
   const result = buildVisibleHistoryMessages(rows, new Set(), []);
 
   expect((result[0] as { run_id?: string }).run_id).toBe("run-1");
+});
+
+test("buildVisibleHistoryMessages carries the global feed seq onto content", () => {
+  const result = buildVisibleHistoryMessages(
+    [
+      {
+        run_id: "run-1",
+        seq: 42,
+        content: { id: "ai-1", type: "ai", content: "answer" } as Message,
+        metadata: { caller: "lead_agent" },
+        created_at: "2026-06-26T00:00:00Z",
+      },
+    ],
+    new Set(),
+    [],
+  );
+
+  expect(result[0]?.additional_kwargs?.deerflow_seq).toBe(42);
 });
 
 test("loading runs in newest-first order and prepending pages yields chronological messages (regression for #3352)", () => {

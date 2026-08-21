@@ -16,6 +16,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from deerflow.persistence.models.run_event import RunEventRow
+from deerflow.runtime.events.message_identity import message_identity
 from deerflow.runtime.events.store.base import RunEventStore
 from deerflow.runtime.user_context import AUTO, _AutoSentinel, get_current_user, resolve_user_id
 from deerflow.utils.time import coerce_iso
@@ -304,6 +305,44 @@ class DbRunEventStore(RunEventStore):
             stmt = stmt.where(RunEventRow.user_id == resolved_user_id)
         async with self._sf() as session:
             return await session.scalar(stmt) or 0
+
+    async def get_message_seqs(
+        self,
+        thread_id,
+        identities,
+        *,
+        user_id: str | None | _AutoSentinel = AUTO,
+    ):
+        """Resolve checkpoint message identities without paging the feed."""
+        wanted = set(identities)
+        if not wanted:
+            return {}
+
+        resolved_user_id = resolve_user_id(user_id, method_name="DbRunEventStore.get_message_seqs")
+        stmt = (
+            select(RunEventRow.seq, RunEventRow.content)
+            .where(RunEventRow.thread_id == thread_id, RunEventRow.category == "message")
+            .order_by(RunEventRow.seq.asc())
+        )
+        if resolved_user_id is not None:
+            stmt = stmt.where(RunEventRow.user_id == resolved_user_id)
+
+        found: dict[str, int] = {}
+        async with self._sf() as session:
+            result = await session.execute(stmt)
+            for seq, raw_content in result:
+                if not isinstance(raw_content, str) or not raw_content.startswith("{"):
+                    continue
+                try:
+                    content = json.loads(raw_content)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if not isinstance(content, dict):
+                    continue
+                identity = message_identity(content)
+                if identity in wanted and identity not in found:
+                    found[identity] = seq
+        return found
 
     async def delete_by_thread(
         self,

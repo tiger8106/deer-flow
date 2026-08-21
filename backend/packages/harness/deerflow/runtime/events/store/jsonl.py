@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from deerflow.runtime.events.message_identity import message_identity
 from deerflow.runtime.events.store.base import RunEventStore
 
 logger = logging.getLogger(__name__)
@@ -244,6 +245,23 @@ class JsonlRunEventStore(RunEventStore):
     async def count_messages(self, thread_id):
         all_events = await asyncio.to_thread(self._read_thread_events, thread_id)
         return sum(1 for e in all_events if e.get("category") == "message")
+
+    async def get_message_seqs(self, thread_id, identities):
+        wanted = set(identities)
+        if not wanted:
+            return {}
+        all_events = await asyncio.to_thread(self._read_thread_events, thread_id)
+        found: dict[str, int] = {}
+        for event in all_events:
+            if event.get("category") != "message":
+                continue
+            content = event.get("content")
+            if not isinstance(content, dict):
+                continue
+            identity = message_identity(content)
+            if identity in wanted and identity not in found:
+                found[identity] = event["seq"]
+        return found
 
     async def delete_by_thread(self, thread_id):
         async with self._get_write_lock(thread_id):

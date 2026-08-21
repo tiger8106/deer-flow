@@ -9,6 +9,7 @@ from __future__ import annotations
 import bisect
 from datetime import UTC, datetime
 
+from deerflow.runtime.events.message_identity import message_identity
 from deerflow.runtime.events.store.base import RunEventStore
 
 
@@ -138,6 +139,22 @@ class MemoryRunEventStore(RunEventStore):
 
     async def count_messages(self, thread_id):
         return len(self._messages.get(thread_id, []))
+
+    async def get_message_seqs(self, thread_id, identities):
+        wanted = set(identities)
+        if not wanted:
+            return {}
+        found: dict[str, int] = {}
+        for record in self._messages.get(thread_id, []):
+            content = record.get("content")
+            if not isinstance(content, dict):
+                continue
+            identity = message_identity(content)
+            if identity in wanted and identity not in found:
+                # The first persisted occurrence is the stable position even
+                # when the same message is written again during reconciliation.
+                found[identity] = record["seq"]
+        return found
 
     async def delete_by_thread(self, thread_id):
         events = self._events.pop(thread_id, [])

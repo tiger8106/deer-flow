@@ -12,6 +12,7 @@ Implementations:
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 
 
 class RunEventStore(abc.ABC):
@@ -105,6 +106,15 @@ class RunEventStore(abc.ABC):
     @abc.abstractmethod
     async def count_messages(self, thread_id: str) -> int:
         """Count displayable messages (category=message) in a thread."""
+
+    @abc.abstractmethod
+    async def get_message_seqs(self, thread_id: str, identities: Sequence[str]) -> dict[str, int]:
+        """Return persisted feed positions for the requested message identities.
+
+        Checkpoint values do not carry the event-feed ``seq``.  Implementations
+        should return the earliest matching position for each identity and omit
+        missing identities so callers can gracefully handle legacy data.
+        """
 
     @abc.abstractmethod
     async def delete_by_thread(self, thread_id: str) -> int:

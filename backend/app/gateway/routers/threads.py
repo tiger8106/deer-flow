@@ -36,6 +36,7 @@ from deerflow.runtime.context_compaction import (
     ThreadCompactionResult,
     compact_thread_context,
 )
+from deerflow.runtime.events.message_seq import stamp_messages_with_seq
 from deerflow.runtime.goal import (
     DEFAULT_MAX_GOAL_CONTINUATIONS,
     build_goal_state,
@@ -780,6 +781,11 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     status = _derive_thread_status(checkpoint_tuple) if checkpoint_tuple is not None else record.get("status", "idle")
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {} if checkpoint_tuple is not None else {}
     channel_values = checkpoint.get("channel_values", {})
+    values = serialize_channel_values_for_api(channel_values)
+    messages = values.get("messages") if isinstance(values, dict) else None
+    if isinstance(messages, list):
+        event_store = getattr(request.app.state, "run_event_store", None)
+        values["messages"] = await stamp_messages_with_seq(event_store, thread_id, messages)
 
     return ThreadResponse(
         thread_id=thread_id,
@@ -787,7 +793,7 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
         created_at=coerce_iso(record.get("created_at", "")),
         updated_at=coerce_iso(record.get("updated_at", "")),
         metadata=record.get("metadata", {}),
-        values=serialize_channel_values_for_api(channel_values),
+        values=values,
     )
 
 
@@ -928,6 +934,10 @@ async def get_thread_state(thread_id: str, request: Request) -> ThreadStateRespo
     tasks = [{"id": getattr(t, "id", ""), "name": getattr(t, "name", "")} for t in tasks_raw]
 
     values = serialize_channel_values_for_api(channel_values)
+    messages = values.get("messages") if isinstance(values, dict) else None
+    if isinstance(messages, list):
+        event_store = getattr(request.app.state, "run_event_store", None)
+        values["messages"] = await stamp_messages_with_seq(event_store, thread_id, messages)
 
     return ThreadStateResponse(
         values=values,
@@ -1143,7 +1153,12 @@ async def get_thread_history(thread_id: str, body: ThreadHistoryRequest, request
                     except Exception:
                         logger.warning("Failed to inject turn_duration for thread %s", thread_id, exc_info=True)
 
-                    values["messages"] = serialized_msgs
+                    event_store = getattr(request.app.state, "run_event_store", None)
+                    values["messages"] = await stamp_messages_with_seq(
+                        event_store,
+                        thread_id,
+                        serialized_msgs,
+                    )
 
             is_latest_checkpoint = False
 

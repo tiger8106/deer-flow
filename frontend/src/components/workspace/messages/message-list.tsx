@@ -121,12 +121,51 @@ function LoadMoreHistoryIndicator({
 }: {
   isLoading?: boolean;
   hasMore?: boolean;
-  loadMore?: () => void;
+  loadMore?: () => void | Promise<void>;
 }) {
   const { t } = useI18n();
+  const { scrollRef } = useStickToBottomContext();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastLoadRef = useRef(0);
+  const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
+
+  // StickToBottom attaches its scroll ref to the Content element rather than
+  // the Conversation wrapper.  Resolve it after mount so the observer uses the
+  // actual scroll viewport; observing the document made the top sentinel miss
+  // when the history was inside a nested flex container.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setScrollRoot(scrollRef.current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [scrollRef]);
+
+  const loadMoreWithAnchor = useCallback(() => {
+    const element = scrollRef.current;
+    const wasNearTop = element ? element.scrollTop <= 8 : false;
+    const previousHeight = element?.scrollHeight ?? 0;
+    const previousTop = element?.scrollTop ?? 0;
+    const result = loadMore?.();
+
+    const restoreAnchor = () => {
+      requestAnimationFrame(() => {
+        if (!element || !wasNearTop) {
+          return;
+        }
+        const heightDelta = element.scrollHeight - previousHeight;
+        if (heightDelta > 0) {
+          element.scrollTop = previousTop + heightDelta;
+        }
+      });
+    };
+
+    if (result && typeof result.then === "function") {
+      void result.then(restoreAnchor, restoreAnchor);
+    } else {
+      restoreAnchor();
+    }
+  }, [loadMore, scrollRef]);
 
   const throttledLoadMore = useCallback(() => {
     if (!hasMore || isLoading) {
@@ -139,7 +178,7 @@ function LoadMoreHistoryIndicator({
 
     if (remaining <= 0) {
       lastLoadRef.current = now;
-      loadMore?.();
+      loadMoreWithAnchor();
       return;
     }
 
@@ -153,9 +192,9 @@ function LoadMoreHistoryIndicator({
         return;
       }
       lastLoadRef.current = Date.now();
-      loadMore?.();
+      loadMoreWithAnchor();
     }, remaining);
-  }, [hasMore, isLoading, loadMore]);
+  }, [hasMore, isLoading, loadMoreWithAnchor]);
 
   useEffect(() => {
     const element = sentinelRef.current;
@@ -170,6 +209,7 @@ function LoadMoreHistoryIndicator({
         }
       },
       {
+        root: scrollRoot,
         rootMargin: "120px 0px 0px 0px",
       },
     );
@@ -179,7 +219,7 @@ function LoadMoreHistoryIndicator({
     return () => {
       observer.disconnect();
     };
-  }, [hasMore, throttledLoadMore]);
+  }, [hasMore, scrollRoot, throttledLoadMore]);
 
   useEffect(() => {
     return () => {
@@ -265,7 +305,7 @@ export function MessageList({
   paddingBottom?: number;
   tokenUsageInlineMode?: TokenUsageInlineMode;
   hasMoreHistory?: boolean;
-  loadMoreHistory?: () => void;
+  loadMoreHistory?: () => void | Promise<void>;
   isHistoryLoading?: boolean;
   onRegenerateMessage?: (
     messageId: string,

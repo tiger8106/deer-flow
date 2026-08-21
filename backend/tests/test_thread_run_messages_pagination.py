@@ -54,9 +54,10 @@ class _EndingCrossProcessBridge:
 
 
 def _make_event_store(rows: list[dict]):
-    """Return an AsyncMock event store whose list_messages_by_run() returns rows."""
+    """Return an async mock event store for run- and thread-level pagination."""
     store = MagicMock()
     store.list_messages_by_run = AsyncMock(return_value=rows)
+    store.list_messages = AsyncMock(return_value=rows)
     return store
 
 
@@ -210,6 +211,49 @@ def test_empty_data_when_no_messages():
     body = response.json()
     assert body["data"] == []
     assert body["has_more"] is False
+
+
+def test_thread_page_uses_global_seq_cursor():
+    """Thread history pages must not depend on the run listing cap."""
+    rows = [_make_message(i) for i in range(1, 52)]
+    event_store = _make_event_store(rows)
+    app = _make_app(event_store=event_store)
+    with TestClient(app) as client:
+        response = client.get("/api/threads/thread-global/messages/page?limit=50")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_more"] is True
+    assert body["next_before_seq"] == 2
+    assert [message["seq"] for message in body["data"]] == list(range(2, 52))
+    event_store.list_messages.assert_awaited_once_with(
+        "thread-global",
+        limit=51,
+        before_seq=None,
+        after_seq=None,
+    )
+
+
+def test_thread_page_before_cursor_keeps_newest_side_of_page():
+    rows = [_make_message(i) for i in range(1, 18)]
+    event_store = _make_event_store(rows)
+    app = _make_app(event_store=event_store)
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/threads/thread-global/messages/page?before_seq=18&limit=16"
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_more"] is True
+    assert body["next_before_seq"] == 2
+    assert [message["seq"] for message in body["data"]] == list(range(2, 18))
+    event_store.list_messages.assert_awaited_once_with(
+        "thread-global",
+        limit=17,
+        before_seq=18,
+        after_seq=None,
+    )
 
 
 def test_get_run_hydrates_store_only_run():
