@@ -27,6 +27,12 @@ import {
 import { Task, TaskTrigger } from "@/components/ai-elements/task";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   deleteFeedback,
   upsertFeedback,
   type FeedbackData,
@@ -58,6 +64,7 @@ import { cn } from "@/lib/utils";
 import { WorkspaceChangeBadge } from "../changes";
 import { CitationSourcesPanel } from "../citations/citation-sources-panel";
 import { CopyButton } from "../copy-button";
+import { FullscreenDialogCloseButton } from "../fullscreen-dialog-close-button";
 import { ReferenceAttachmentSummary } from "../sidecar/reference-attachments";
 import { SlashSkillChip } from "../slash-skill-chip";
 
@@ -602,18 +609,12 @@ function RichFileCard({
 
   if (isImage) {
     return (
-      <a
-        href={fileUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group border-border/40 relative block overflow-hidden rounded-lg border"
-      >
-        <img
-          src={fileUrl}
-          alt={file.filename}
-          className="h-32 w-auto max-w-60 object-cover transition-transform group-hover:scale-105"
-        />
-      </a>
+      <UploadedImagePreview
+        src={fileUrl}
+        alt={file.filename}
+        previewLabel={t.common.preview}
+        className="h-32 w-auto max-w-60 object-cover transition-transform group-hover:scale-105"
+      />
     );
   }
 
@@ -640,6 +641,48 @@ function RichFileCard({
         </span>
       </div>
     </div>
+  );
+}
+
+function UploadedImagePreview({
+  src,
+  alt,
+  previewLabel,
+  className,
+}: {
+  src: string;
+  alt: string;
+  previewLabel: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const accessibleLabel = alt ? `${previewLabel}: ${alt}` : previewLabel;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label={accessibleLabel}
+          className="group border-border/40 relative block cursor-zoom-in overflow-hidden rounded-lg border bg-transparent p-0"
+        >
+          <img src={src} alt={alt} className={className} />
+        </button>
+      </DialogTrigger>
+      <DialogContent
+        aria-describedby={undefined}
+        className="top-0 left-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 items-center justify-center gap-0 overflow-hidden rounded-none border-0 bg-black/90 p-4 text-white sm:max-w-none"
+        showCloseButton={false}
+      >
+        <FullscreenDialogCloseButton />
+        <DialogTitle className="sr-only">{accessibleLabel}</DialogTitle>
+        <img
+          src={src}
+          alt={alt}
+          className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] object-contain"
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
 
