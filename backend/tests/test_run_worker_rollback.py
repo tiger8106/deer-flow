@@ -1407,10 +1407,12 @@ async def test_ensure_interrupted_title_reloads_latest_checkpoint_before_write()
 
     title = await _ensure_interrupted_title(checkpointer=checkpointer, thread_id="thread-1", app_config=app_config)
 
-    assert title == "New prompt"
+    # The sync interrupted-run path must keep even an English checkpoint title
+    # in Chinese; the newer messages are still preserved independently.
+    assert title == "新建会话"
     _, written_checkpoint, _, _ = checkpointer.aput.await_args.args
     assert written_checkpoint["channel_values"]["messages"] == new_messages
-    assert written_checkpoint["channel_values"]["title"] == "New prompt"
+    assert written_checkpoint["channel_values"]["title"] == "新建会话"
 
 
 @pytest.mark.anyio

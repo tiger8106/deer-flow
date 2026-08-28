@@ -735,7 +735,7 @@ Returns `{}` when Langfuse is not in the enabled providers — LangSmith-only de
 - `sandbox.use` - Sandbox provider class path
 - `skills.path` / `skills.container_path` - Host and container paths to skills directory
 - `skills.deferred_discovery` - When `true`, replaces the full-metadata `<available_skills>` prompt block with a compact `<skill_index>` (names only) and registers the `describe_skill` tool so the agent fetches metadata on demand. Defaults to `false` (legacy full-metadata injection)
-- `title` - Auto-title generation (enabled, max_words, max_chars, model_name; null model_name uses fast local fallback, explicit model_name uses the prompt_template LLM path)
+- `title` - Chinese auto-title generation (enabled, max_words, max_chars, model_name; Chinese ordinary turns can use a local fallback, while non-Chinese/image-only turns use the default model when model_name is null)
 - `summarization` - Context summarization (enabled, trigger conditions, keep policy)
 - `subagents.enabled` - Master switch for subagent delegation
 - `memory` - Memory system (enabled, storage_path, debounce_seconds, model_name, max_facts, fact_confidence_threshold, injection_enabled, max_injection_tokens, staleness_review_enabled, staleness_age_days, staleness_min_candidates, staleness_max_removals_per_cycle, staleness_protected_categories)

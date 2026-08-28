@@ -16,6 +16,7 @@ class TestTitleConfig:
         assert config.max_words == 6
         assert config.max_chars == 60
         assert config.model_name is None
+        assert "中文" in config.prompt_template
 
     def test_custom_config(self):
         """Test custom configuration."""

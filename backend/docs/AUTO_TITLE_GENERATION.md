@@ -2,14 +2,14 @@
 
 ## 功能说明
 
-自动为对话线程生成标题，在用户首次提问并收到回复后自动触发。
+自动为对话线程生成中文标题，在用户首次提问并收到回复后自动触发。即使首条消息只有图片，标题也会结合助手对图片的分析生成中文标题。
 
 ## 实现方式
 
 使用 `TitleMiddleware` 在 `after_model` 钩子中：
 1. 检测是否是首次对话（1个用户消息 + 1个助手回复）
 2. 检查 state 是否已有 title
-3. 默认从首条用户消息生成本地 fallback 标题，避免在流式回复结束前额外等待一次 LLM 调用；显式配置 `model_name` 时才调用 LLM 生成标题（默认最多6个词）
+3. 已包含中文的普通首问默认从首条用户消息生成本地 fallback 标题；英文、纯图片或没有文字的首问使用默认模型生成中文标题，显式配置 `model_name` 时所有首问都使用该模型（默认最多6个词）
 4. 将 title 存储到 `ThreadState` 中（会被 checkpointer 持久化）
 
 TitleMiddleware 会先把 LangChain message content 里的结构化 block/list 内容归一化为纯文本，再拼到 title prompt 里，避免把 Python/JSON 的原始 repr 泄漏到标题生成模型。
@@ -67,7 +67,8 @@ title:
   enabled: true
   max_words: 6
   max_chars: 60
-  model_name: null  # null = 快速本地 fallback；填模型名才启用 LLM 标题
+  # null = 中文首问优先使用本地 fallback；英文、纯图片首问使用默认模型
+  model_name: null
 ```
 
 或在代码中配置：
@@ -89,7 +90,7 @@ set_title_config(TitleConfig(
 ```typescript
 // 方式1: 从 thread state 获取
 const state = await client.threads.getState(threadId);
-const title = state.values.title || "New Conversation";
+const title = state.values.title || "新建会话";
 
 // 方式2: 监听 stream 事件
 for await (const chunk of client.runs.stream(threadId, assistantId, {
@@ -118,7 +119,7 @@ function ConversationList() {
           const state = await client.threads.getState(t.thread_id);
           return {
             id: t.thread_id,
-            title: state.values.title || "New Conversation",
+            title: state.values.title || "新建会话",
             updatedAt: t.updated_at,
           };
         })
@@ -158,9 +159,9 @@ sequenceDiagram
     Agent-->>LangGraph: 返回回复
     LangGraph->>TitleMiddleware: after_model()/aafter_model()
     TitleMiddleware->>TitleMiddleware: 检查是否需要生成 title
-    alt title.model_name 为空（默认）
-        TitleMiddleware->>TitleMiddleware: 从首条用户消息生成本地 fallback title
-    else 显式配置 title.model_name
+    alt 中文普通首问且 title.model_name 为空
+        TitleMiddleware->>TitleMiddleware: 从首条用户消息生成中文本地 fallback title
+    else 英文/纯图片首问或显式配置 title.model_name
         TitleMiddleware->>TitleModel: 生成 LLM title
         TitleModel-->>TitleMiddleware: 返回 title
     end
@@ -182,9 +183,9 @@ sequenceDiagram
 ## 注意事项
 
 1. **读取方式不同**：Title 在 `state.values.title` 而非 `thread.metadata.title`
-2. **性能考虑**：默认配置不调用标题模型；只有显式配置 `title.model_name` 时，才会在首轮回复后额外等待一次 LLM title 生成
+2. **性能考虑**：默认配置下，已经包含中文的普通首问不调用标题模型；英文、纯图片或没有文字的首问需要调用默认模型进行中文概括
 3. **并发安全**：middleware 在 agent 首次完整回复后更新 state，不需要客户端额外请求
-4. **Fallback 策略**：默认使用用户消息前几个字符作为 title；如果显式启用的 LLM 调用失败，也会回退到该策略
+4. **Fallback 策略**：优先使用中文用户消息或图片分析结果；模型调用失败、返回非中文或没有可用文字时，回退到中文标题
 
 ## 测试
 
@@ -199,7 +200,7 @@ uv run pytest tests/test_title_middleware_core_logic.py tests/test_title_generat
 
 1. 检查配置是否启用：`get_title_config().enabled == True`
 2. 确认是首次对话：只有 1 个用户消息和 1 个助手回复时才会触发
-3. 如果显式配置了 `title.model_name`，检查标题模型是否可用；未配置时会走本地 fallback
+3. 如果首问是英文、纯图片或没有文字，检查默认模型是否可用；模型不可用时会显示中文 fallback 标题
 
 ### Title 生成但客户端看不到
 
@@ -238,10 +239,12 @@ async def _agenerate_title_result(self, state: TitleMiddlewareState) -> dict | N
         return None
 
     config = self._get_title_config()
-    if not config.model_name:
+    user_msg = self._get_title_user_message(state)
+    has_image_upload = self._has_image_upload(state)
+    if not config.model_name and _CHINESE_CHAR_RE.search(user_msg) and not has_image_upload:
         return self._generate_title_result(state)
 
-    # 显式配置 title.model_name 时才调用标题模型；失败会回退到本地 title。
+    # 英文、纯图片首问或显式配置 title.model_name 时调用标题模型；失败会回退到中文 title。
     ...
 ```
 

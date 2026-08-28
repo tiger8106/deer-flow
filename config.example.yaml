@@ -1316,7 +1316,8 @@ title:
   enabled: true
   max_words: 6
   max_chars: 60
-  model_name: null # null = fast local fallback; set a model name to use LLM title generation
+  # null = local Chinese fallback when possible; non-Chinese/image-only turns use the default model
+  model_name: null
 
 # ============================================================================
 # Summarization Configuration

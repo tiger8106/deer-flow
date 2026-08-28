@@ -16,9 +16,9 @@
 #### [`packages/harness/deerflow/agents/middlewares/title_middleware.py`](../packages/harness/deerflow/agents/middlewares/title_middleware.py) (新建)
 - ✅ 创建 `TitleMiddleware` 类
 - ✅ 实现 `_should_generate_title()` 检查是否需要生成
-- ✅ 默认使用本地 fallback 生成标题，避免流式回复结束前等待额外 LLM 调用；显式配置 `model_name` 时可使用 LLM 标题
+- ✅ 已包含中文的普通首问默认使用本地 fallback；英文、纯图片或没有文字的首问使用默认模型生成中文标题
 - ✅ 实现 `after_model()` / `aafter_model()` 钩子，在首次对话后自动触发
-- ✅ 包含 fallback 策略（LLM 未配置或失败时使用用户消息前几个字符）
+- ✅ 包含中文 fallback 策略（模型未配置、调用失败或返回非中文时仍不会写入英文标题）
 
 #### [`packages/harness/deerflow/config/app_config.py`](../packages/harness/deerflow/config/app_config.py)
 - ✅ 导入 `load_title_config_from_dict`
@@ -37,7 +37,8 @@ title:
   enabled: true
   max_words: 6
   max_chars: 60
-  model_name: null  # null = 快速本地 fallback；填模型名才启用 LLM 标题
+  # null = 中文首问优先使用本地 fallback；英文、纯图片首问使用默认模型
+  model_name: null
 ```
 
 ### 3. 文档
@@ -85,9 +86,9 @@ TitleMiddleware.after_model()/aafter_model() 触发
   ↓
 检查：是否首次对话？是否已有 title？
   ↓
-默认从首条用户消息生成本地 fallback title
+已包含中文的普通首问从首条用户消息生成中文本地 fallback title
   ↓
-如果显式配置 title.model_name，才调用 LLM 生成更精炼的 title
+英文、纯图片或没有文字的首问，或显式配置 title.model_name 时，调用 LLM 生成中文 title
   ↓
 返回 {"title": "..."} 更新 state
   ↓
@@ -115,7 +116,8 @@ title:
   enabled: true
   max_words: 8      # 标题最多 8 个词
   max_chars: 80     # 标题最多 80 个字符
-  model_name: null  # null = 快速本地 fallback；填模型名才启用 LLM 标题
+  # null = 中文首问优先使用本地 fallback；英文、纯图片首问使用默认模型
+  model_name: null
 ```
 
 3. **配置持久化（可选）**
@@ -144,7 +146,7 @@ checkpointer = SqliteSaver.from_conn_string("deerflow.db")
 ```typescript
 // 获取 thread title
 const state = await client.threads.getState(threadId);
-const title = state.values.title || "New Conversation";
+const title = state.values.title || "新建会话";
 
 // 显示在对话列表
 <li>{title}</li>
@@ -172,7 +174,7 @@ pytest
 
 1. 检查配置：`title.enabled = true`
 2. 确认是首次对话（1 个用户消息 + 1 个助手回复）
-3. 如果显式配置了 `title.model_name`，检查标题模型是否可用；未配置时会走本地 fallback
+3. 如果首问是英文、纯图片或没有文字，检查默认模型是否可用；模型不可用时会显示中文 fallback 标题
 
 ### Title 生成但看不到？
 
@@ -196,14 +198,14 @@ pytest
 
 ## 📊 性能影响
 
-- **默认延迟**：默认 `title.model_name: null` 不会发起额外 LLM 调用，仅从首条用户消息生成本地 fallback title
-- **显式 LLM 标题延迟**：只有配置 `title.model_name` 时，首轮回复后才会等待一次标题模型调用
+- **默认延迟**：`title.model_name: null` 时，中文普通首问不发起额外 LLM 调用；英文、纯图片或没有文字的首问会额外调用默认模型
+- **显式 LLM 标题延迟**：配置 `title.model_name` 后，每个新会话首轮回复后都会等待一次标题模型调用
 - **并发安全**：在 `after_model()` / `aafter_model()` 中更新 state，不需要客户端额外请求
 - **资源消耗**：每个 thread 只生成一次
 
 ### 优化建议
 
-1. 默认保持 `model_name: null`，避免流式回复结束前的额外 LLM 等待
+1. 默认保持 `model_name: null`，中文普通首问可避免额外 LLM 等待
 2. 如需更精炼标题，再显式配置较快的标题模型
 3. 减少 `max_words` 和 `max_chars`，并让 prompt 保持简洁
 
@@ -212,7 +214,7 @@ pytest
 ## 🚀 下一步
 
 - [ ] 补充 prompt template 的集成测试
-- [ ] 支持多语言 title 生成
+- [x] 统一使用中文 title 生成，并覆盖纯图片首问
 - [ ] 添加 title 重新生成功能
 - [ ] 监控 title 生成成功率和延迟
 
