@@ -48,13 +48,6 @@ The single LangGraph agent (`lead_agent`) is the runtime entry point, created vi
 - **Subagent delegation** for parallel task execution
 - **System prompt** with skills injection, memory context, and working directory guidance
 
-### Conversation titles
-
-New conversation history titles are always generated in Chinese. Chinese ordinary first-turn
-messages use a local fallback by default; English, image-only, or text-free first turns use the
-default model for a Chinese summary. If the model is unavailable or returns a non-Chinese title,
-the middleware persists a Chinese fallback instead.
-
 ### User-facing identity
 
 The Tiger deployment presents the lead agent and generated report templates as Tiger. User-facing

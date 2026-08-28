@@ -573,11 +573,8 @@ title:
   enabled: true
   max_words: 6
   max_chars: 60
-  # null = local Chinese fallback when possible; non-Chinese/image-only turns use the default model
-  model_name: null
+  model_name: null  # null = fast local fallback; set a model name to use LLM title generation
 ```
-
-新会话标题统一使用中文。已经包含中文的普通首问优先使用本地 fallback；英文、纯图片或没有文字的首问会调用默认模型生成中文标题。模型调用失败或返回非中文内容时，会回退到中文标题。
 
 ### GitHub API Token (Optional for GitHub Deep Research Skill)
 

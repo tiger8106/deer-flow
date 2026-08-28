@@ -251,115 +251,6 @@ class TestTitleMiddlewareCoreLogic:
         assert "<uploaded_files>" not in prompt
         assert "The following files were uploaded" not in prompt
 
-    def test_image_only_first_message_uses_chinese_title_prompt(self, monkeypatch):
-        """An image-only first turn must still ask the default model for a Chinese title."""
-        _set_test_title_config(max_chars=30, model_name=None)
-        middleware = TitleMiddleware()
-        model = MagicMock()
-        model.ainvoke = AsyncMock(return_value=AIMessage(content="现场照片内容分析"))
-        create_chat_model = MagicMock(return_value=model)
-        monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
-
-        state = {
-            "messages": [
-                HumanMessage(
-                    content=[{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}],
-                    additional_kwargs={
-                        "files": [{"filename": "现场照片.png"}],
-                        ORIGINAL_USER_CONTENT_KEY: "",
-                    },
-                ),
-                AIMessage(content="图片中是办公室现场照片，桌面上有一台显示器。"),
-            ]
-        }
-
-        result = asyncio.run(middleware._agenerate_title_result(state))
-
-        assert result == {"title": "现场照片内容分析"}
-        create_chat_model.assert_called_once_with(name=None, thinking_enabled=False, attach_tracing=False)
-        prompt = model.ainvoke.await_args.args[0]
-        assert "简体中文" in prompt
-        assert "本轮包含图片附件" in prompt
-        assert "用户：\n" in prompt
-        assert "<uploaded_files>" not in prompt
-
-    def test_image_only_title_failure_uses_chinese_fallback(self, monkeypatch):
-        """An image-only turn must not fall back to an English answer when the model fails."""
-        _set_test_title_config(max_chars=30, model_name=None)
-        middleware = TitleMiddleware()
-        model = MagicMock()
-        model.ainvoke = AsyncMock(side_effect=RuntimeError("model unavailable"))
-        monkeypatch.setattr(title_middleware_module, "create_chat_model", MagicMock(return_value=model))
-
-        state = {
-            "messages": [
-                HumanMessage(
-                    content=[{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}],
-                    additional_kwargs={
-                        "files": [{"filename": "photo.png"}],
-                        ORIGINAL_USER_CONTENT_KEY: "",
-                    },
-                ),
-                AIMessage(content="This is an office photo."),
-            ]
-        }
-
-        assert asyncio.run(middleware._agenerate_title_result(state)) == {"title": "图片内容咨询"}
-
-    def test_non_chinese_first_message_uses_default_model_for_chinese_title(self, monkeypatch):
-        """A normal non-Chinese first turn must be translated into a Chinese title."""
-        _set_test_title_config(max_chars=30, model_name=None)
-        middleware = TitleMiddleware()
-        model = MagicMock()
-        model.ainvoke = AsyncMock(return_value=AIMessage(content="项目部署指南"))
-        create_chat_model = MagicMock(return_value=model)
-        monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
-
-        state = {
-            "messages": [
-                HumanMessage(content="How do I deploy this project?"),
-                AIMessage(content="I will explain the deployment steps."),
-            ]
-        }
-
-        result = asyncio.run(middleware._agenerate_title_result(state))
-
-        assert result == {"title": "项目部署指南"}
-        create_chat_model.assert_called_once_with(name=None, thinking_enabled=False, attach_tracing=False)
-        assert "简体中文" in model.ainvoke.await_args.args[0]
-
-    def test_non_chinese_model_title_falls_back_to_chinese(self, monkeypatch):
-        """A non-compliant title-model response must never be persisted as an English title."""
-        _set_test_title_config(max_chars=30, model_name="title-model")
-        middleware = TitleMiddleware()
-        model = MagicMock()
-        model.ainvoke = AsyncMock(return_value=AIMessage(content="Project deployment"))
-        monkeypatch.setattr(title_middleware_module, "create_chat_model", MagicMock(return_value=model))
-
-        state = {
-            "messages": [
-                HumanMessage(content="How do I deploy this project?"),
-                AIMessage(content="I will explain the deployment steps."),
-            ]
-        }
-
-        result = asyncio.run(middleware._agenerate_title_result(state))
-
-        assert result == {"title": "新建会话"}
-
-    def test_sync_non_chinese_first_message_falls_back_to_chinese(self):
-        """The synchronous/interrupted-run path must also keep the title Chinese."""
-        _set_test_title_config(max_chars=30)
-        middleware = TitleMiddleware()
-        state = {
-            "messages": [
-                HumanMessage(content="How do I deploy this project?"),
-                AIMessage(content="I will explain the deployment steps."),
-            ]
-        }
-
-        assert middleware._generate_title_result(state) == {"title": "新建会话"}
-
     def test_non_image_upload_keeps_local_title_and_removes_upload_protocol(self, monkeypatch):
         _set_test_title_config(max_chars=30, model_name=None)
         middleware = TitleMiddleware()
@@ -604,12 +495,6 @@ class TestTitleMiddlewareCoreLogic:
         raw = "<think>just thinking, no real title</think>"
         result = middleware._parse_title(raw)
         assert result == ""
-
-    def test_parse_title_rejects_non_chinese_model_output(self):
-        """The persisted title must remain Chinese even when the model ignores the prompt."""
-        middleware = TitleMiddleware()
-
-        assert middleware._parse_title("Project deployment") == ""
 
     def test_build_title_prompt_strips_assistant_think_tags(self):
         """<think> blocks in assistant messages are stripped before being included in the title prompt."""
