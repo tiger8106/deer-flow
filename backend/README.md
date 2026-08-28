@@ -295,6 +295,11 @@ Key sections:
 - `subagents` - Subagent system (enabled/disabled)
 - `memory` - Memory system settings (enabled, storage, debounce, facts limits)
 
+The web client sends the selected UI locale in each run's `context.title_locale` (`zh-CN` or
+`en-US`). TitleMiddleware uses that locale for the title prompt and validates model output, so
+Chinese users get Chinese titles and English users get English titles. When the locale is not
+provided by another client, the historical content-language fallback remains available.
+
 Provider note:
 - `models[*].use` references provider classes by module path (for example `langchain_openai:ChatOpenAI`).
 - If a provider module is missing, DeerFlow now returns an actionable error with install guidance (for example `uv add langchain-google-genai`).

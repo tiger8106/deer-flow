@@ -1499,6 +1499,40 @@ async def test_ensure_interrupted_title_writes_graph_input_fallback_without_chec
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("title_locale", "user_message", "expected_title"),
+    [
+        ("zh-CN", "Please name this thread", "新建会话"),
+        ("en-US", "请命名这个会话", "New Conversation"),
+    ],
+)
+async def test_ensure_interrupted_title_respects_run_locale(title_locale, user_message, expected_title):
+    """Interrupted first turns use the same locale as the original run."""
+    from deerflow.config.title_config import TitleConfig
+
+    checkpointer = _TitleCheckpointer(
+        tuple_value=_FakeCheckpointTuple(
+            checkpoint={
+                "id": "ckpt-1",
+                "ts": "2026-06-29T00:00:00Z",
+                "channel_values": {"messages": [{"role": "user", "content": user_message}]},
+                "channel_versions": {"messages": 1},
+            },
+            metadata={"source": "loop", "step": 1},
+        )
+    )
+
+    title = await _ensure_interrupted_title(
+        checkpointer=checkpointer,
+        thread_id="thread-1",
+        app_config=SimpleNamespace(title=TitleConfig(enabled=True)),
+        title_locale=title_locale,
+    )
+
+    assert title == expected_title
+
+
+@pytest.mark.anyio
 async def test_ensure_interrupted_title_bumps_existing_string_version(monkeypatch):
     """When the checkpointer lacks ``get_next_version`` and the prior title
     version is a string (some savers use UUID-shaped versions), the helper must
@@ -1792,7 +1826,10 @@ async def test_worker_finally_block_swallows_helper_exceptions(monkeypatch):
     """
     import deerflow.runtime.runs.worker as worker_module
 
-    async def _boom(*_args, **_kwargs):
+    captured_title_call: dict[str, Any] = {}
+
+    async def _boom(*_args, **kwargs):
+        captured_title_call.update(kwargs)
         raise RuntimeError("forced helper failure")
 
     monkeypatch.setattr(worker_module, "_ensure_interrupted_title", _boom)
@@ -1849,11 +1886,12 @@ async def test_worker_finally_block_swallows_helper_exceptions(monkeypatch):
         ctx=RunContext(checkpointer=_MinimalCheckpointer(), thread_store=_ThreadStore()),
         agent_factory=factory,
         graph_input={"messages": []},
-        config={},
+        config={"context": {"title_locale": "zh-CN"}},
     )
 
     # The helper raised, but the run still reaches the threads_meta status sync
     # and ``publish_end`` — i.e. the SSE stream is closed cleanly and the row
     # reflects the run outcome.
     assert captured_status.get("status") == ("thread-1", "interrupted")
+    assert captured_title_call["title_locale"] == "zh-CN"
     bridge.publish_end.assert_awaited_once_with(record.run_id)

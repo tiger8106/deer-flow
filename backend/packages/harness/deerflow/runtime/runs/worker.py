@@ -598,7 +598,19 @@ async def run_agent(
             try:
                 await run_manager.wait_for_prior_finalizing(thread_id, run_id)
                 if not await run_manager.has_later_started_run(thread_id, run_id):
-                    await _ensure_interrupted_title(checkpointer=checkpointer, thread_id=thread_id, app_config=ctx.app_config, graph_input=graph_input)
+                    caller_context = config.get("context")
+                    title_locale = None
+                    if isinstance(caller_context, dict):
+                        candidate_locale = caller_context.get("title_locale")
+                        if isinstance(candidate_locale, str) and candidate_locale.strip():
+                            title_locale = candidate_locale
+                    await _ensure_interrupted_title(
+                        checkpointer=checkpointer,
+                        thread_id=thread_id,
+                        app_config=ctx.app_config,
+                        graph_input=graph_input,
+                        title_locale=title_locale,
+                    )
             except Exception:
                 logger.debug("Failed to generate interrupted title for thread %s (non-fatal)", thread_id)
 
@@ -1136,7 +1148,14 @@ def _title_generation_state(channel_values: dict[str, Any], graph_input: Any | N
     return state
 
 
-async def _ensure_interrupted_title(*, checkpointer: Any, thread_id: str, app_config: AppConfig | None, graph_input: Any | None = None) -> str | None:
+async def _ensure_interrupted_title(
+    *,
+    checkpointer: Any,
+    thread_id: str,
+    app_config: AppConfig | None,
+    graph_input: Any | None = None,
+    title_locale: str | None = None,
+) -> str | None:
     """Persist a local fallback title for interrupted first-turn runs.
 
     Returns the title that is now persisted (existing or newly written), or
@@ -1157,7 +1176,15 @@ async def _ensure_interrupted_title(*, checkpointer: Any, thread_id: str, app_co
         if existing_title:
             return existing_title
 
-        result = middleware._generate_title_result(_title_generation_state(channel_values, graph_input), allow_partial_exchange=True)
+        state = _title_generation_state(channel_values, graph_input)
+        if title_locale is None:
+            result = middleware._generate_title_result(state, allow_partial_exchange=True)
+        else:
+            result = middleware._generate_title_result(
+                state,
+                allow_partial_exchange=True,
+                title_locale=title_locale,
+            )
         title = result.get("title") if isinstance(result, dict) else None
         if not title:
             return None

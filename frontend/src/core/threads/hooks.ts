@@ -129,6 +129,39 @@ export function buildThreadSubmitMessages({
   ];
 }
 
+export function buildThreadRunContext({
+  context,
+  locale,
+  threadId,
+  extraContext,
+}: {
+  context: LocalSettings["context"];
+  locale: string;
+  threadId: string;
+  extraContext?: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    ...extraContext,
+    ...context,
+    thinking_enabled: context.mode !== "flash",
+    is_plan_mode: context.mode === "pro" || context.mode === "ultra",
+    subagent_enabled: context.mode === "ultra",
+    reasoning_effort:
+      context.reasoning_effort ??
+      (context.mode === "ultra"
+        ? "high"
+        : context.mode === "pro"
+          ? "medium"
+          : context.mode === "thinking"
+            ? "low"
+            : undefined),
+    thread_id: threadId,
+    // Keep the UI language in run context so title generation can follow the
+    // user's setting without exposing a control marker in model messages.
+    title_locale: locale,
+  };
+}
+
 const EMPTY_THREAD_VALUES: AgentThreadState = {
   title: "",
   messages: [],
@@ -780,7 +813,7 @@ export function useThreadStream({
   onFinish,
   onToolEnd,
 }: ThreadStreamOptions) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const currentViewThreadId = displayThreadId ?? threadId ?? null;
   const currentViewThreadIdRef = useRef(currentViewThreadId);
   currentViewThreadIdRef.current = currentViewThreadId;
@@ -1371,23 +1404,12 @@ export function useThreadStream({
             config: {
               recursion_limit: 1000,
             },
-            context: {
-              ...extraContext,
-              ...context,
-              thinking_enabled: context.mode !== "flash",
-              is_plan_mode: context.mode === "pro" || context.mode === "ultra",
-              subagent_enabled: context.mode === "ultra",
-              reasoning_effort:
-                context.reasoning_effort ??
-                (context.mode === "ultra"
-                  ? "high"
-                  : context.mode === "pro"
-                    ? "medium"
-                    : context.mode === "thinking"
-                      ? "low"
-                      : undefined),
-              thread_id: threadId,
-            },
+            context: buildThreadRunContext({
+              context,
+              locale,
+              threadId,
+              extraContext,
+            }),
           },
         );
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
@@ -1408,6 +1430,7 @@ export function useThreadStream({
       thread,
       t.uploads.uploadingFiles,
       context,
+      locale,
       queryClient,
       humanMessageCount,
       persistedMessages,
@@ -1477,22 +1500,7 @@ export function useThreadStream({
           config: {
             recursion_limit: 1000,
           },
-          context: {
-            ...context,
-            thinking_enabled: context.mode !== "flash",
-            is_plan_mode: context.mode === "pro" || context.mode === "ultra",
-            subagent_enabled: context.mode === "ultra",
-            reasoning_effort:
-              context.reasoning_effort ??
-              (context.mode === "ultra"
-                ? "high"
-                : context.mode === "pro"
-                  ? "medium"
-                  : context.mode === "thinking"
-                    ? "low"
-                    : undefined),
-            thread_id: threadId,
-          },
+          context: buildThreadRunContext({ context, locale, threadId }),
         });
         void queryClient.invalidateQueries({ queryKey: ["thread", threadId] });
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
@@ -1518,7 +1526,14 @@ export function useThreadStream({
         sendInFlightRef.current = false;
       }
     },
-    [context, humanMessageCount, persistedMessages, queryClient, thread],
+    [
+      context,
+      humanMessageCount,
+      locale,
+      persistedMessages,
+      queryClient,
+      thread,
+    ],
   );
 
   // Cache the latest thread messages in a ref to compare against incoming history messages for deduplication,

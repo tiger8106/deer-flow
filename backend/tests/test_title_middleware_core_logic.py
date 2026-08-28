@@ -209,6 +209,150 @@ class TestTitleMiddlewareCoreLogic:
 
         assert title == "请帮我总结这段代码"
 
+    @pytest.mark.parametrize(
+        ("title_locale", "user_message", "model_title", "language_marker"),
+        [
+            ("zh-CN", "Please summarize this code", "代码摘要", "简体中文"),
+            ("en-US", "请总结这段代码", "Code summary", "in English"),
+        ],
+    )
+    def test_title_model_follows_ui_locale(self, monkeypatch, title_locale, user_message, model_title, language_marker):
+        _set_test_title_config(max_chars=30, model_name="title-model")
+        middleware = TitleMiddleware()
+        model = MagicMock()
+        model.ainvoke = AsyncMock(return_value=AIMessage(content=model_title))
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", MagicMock(return_value=model))
+
+        state = {
+            "messages": [
+                HumanMessage(content=user_message),
+                AIMessage(content="回答内容" if title_locale == "zh-CN" else "Answer content"),
+            ]
+        }
+
+        result = asyncio.run(middleware._agenerate_title_result(state, title_locale=title_locale))
+
+        assert result == {"title": model_title}
+        prompt = model.ainvoke.await_args.args[0]
+        assert language_marker in prompt
+
+    @pytest.mark.parametrize(
+        ("title_locale", "model_title", "fallback_title"),
+        [
+            ("zh-CN", "English title", "用户问题"),
+            ("en-US", "中文标题", "User question"),
+        ],
+    )
+    def test_wrong_language_model_title_falls_back_to_selected_locale(self, monkeypatch, title_locale, model_title, fallback_title):
+        _set_test_title_config(max_chars=30, model_name="title-model")
+        middleware = TitleMiddleware()
+        model = MagicMock()
+        model.ainvoke = AsyncMock(return_value=AIMessage(content=model_title))
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", MagicMock(return_value=model))
+
+        state = {
+            "messages": [
+                HumanMessage(content="用户问题" if title_locale == "zh-CN" else "User question"),
+                AIMessage(content="助手回答" if title_locale == "zh-CN" else "Assistant answer"),
+            ]
+        }
+
+        result = asyncio.run(middleware._agenerate_title_result(state, title_locale=title_locale))
+
+        assert result == {"title": fallback_title}
+
+    def test_image_title_model_failure_uses_selected_locale(self, monkeypatch):
+        _set_test_title_config(max_chars=40, model_name=None)
+        middleware = TitleMiddleware()
+        model = MagicMock()
+        model.ainvoke = AsyncMock(side_effect=RuntimeError("model unavailable"))
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", MagicMock(return_value=model))
+        state = {
+            "messages": [
+                HumanMessage(
+                    content=[{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}],
+                    additional_kwargs={"files": [{"filename": "photo.png"}]},
+                ),
+                AIMessage(content="图片中有一只猫。"),
+            ]
+        }
+
+        chinese_result = asyncio.run(middleware._agenerate_title_result(state, title_locale="zh-CN"))
+        english_result = asyncio.run(middleware._agenerate_title_result(state, title_locale="en-US"))
+
+        assert chinese_result == {"title": "图片中有一只猫。"}
+        assert english_result == {"title": "Image inquiry"}
+
+    @pytest.mark.parametrize(
+        ("title_locale", "user_message", "expected_title"),
+        [
+            ("zh-CN", "Please summarize this code", "新建会话"),
+            ("en-US", "请总结这段代码", "New Conversation"),
+        ],
+    )
+    def test_local_fallback_does_not_return_opposite_language(self, title_locale, user_message, expected_title):
+        _set_test_title_config(max_chars=30, model_name=None)
+        middleware = TitleMiddleware()
+        state = {
+            "messages": [
+                HumanMessage(content=user_message),
+                AIMessage(content="Answer"),
+            ]
+        }
+
+        result = middleware._generate_title_result(state, title_locale=title_locale)
+
+        assert result == {"title": expected_title}
+
+    @pytest.mark.parametrize(
+        ("title_locale", "user_message", "model_title"),
+        [
+            ("zh-CN", "Please summarize this code", "代码摘要"),
+            ("en-US", "请总结这段代码", "Code summary"),
+        ],
+    )
+    def test_locale_mismatch_uses_default_model_when_no_title_model_is_configured(
+        self,
+        monkeypatch,
+        title_locale,
+        user_message,
+        model_title,
+    ):
+        _set_test_title_config(max_chars=30, model_name=None)
+        middleware = TitleMiddleware()
+        model = MagicMock()
+        model.ainvoke = AsyncMock(return_value=AIMessage(content=model_title))
+        create_chat_model = MagicMock(return_value=model)
+        monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
+        state = {
+            "messages": [
+                HumanMessage(content=user_message),
+                AIMessage(content="回答内容" if title_locale == "zh-CN" else "Answer content"),
+            ]
+        }
+
+        result = asyncio.run(middleware._agenerate_title_result(state, title_locale=title_locale))
+
+        assert result == {"title": model_title}
+        create_chat_model.assert_called_once_with(name=None, thinking_enabled=False, attach_tracing=False)
+
+    def test_runtime_locale_is_forwarded_to_title_generation(self, monkeypatch):
+        _set_test_title_config(model_name="title-model")
+        middleware = TitleMiddleware()
+        generate = AsyncMock(return_value={"title": "English title"})
+        monkeypatch.setattr(middleware, "_agenerate_title_result", generate)
+        state = {"messages": []}
+
+        result = asyncio.run(
+            middleware.aafter_model(
+                state,
+                runtime=SimpleNamespace(context={"title_locale": "en-US"}),
+            )
+        )
+
+        assert result == {"title": "English title"}
+        generate.assert_awaited_once_with(state, title_locale="en-US")
+
     def test_image_upload_uses_default_model_with_clean_question_and_final_answer(self, monkeypatch):
         _set_test_title_config(max_chars=30, model_name=None)
         middleware = TitleMiddleware()

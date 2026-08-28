@@ -576,6 +576,11 @@ title:
   model_name: null  # null = fast local fallback; set a model name to use LLM title generation
 ```
 
+The web client passes the selected UI locale as run context `title_locale`: `zh-CN` produces a
+Chinese title and `en-US` produces an English title. This is per-run input rather than a server
+configuration option, so changing the language affects newly generated titles without changing
+existing thread titles. Image titles use the same locale rule.
+
 ### GitHub API Token (Optional for GitHub Deep Research Skill)
 
 The default GitHub API rate limits are quite restrictive. For frequent project research, we recommend configuring a personal access token (PAT) with read-only permissions.

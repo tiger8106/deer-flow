@@ -1,7 +1,42 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import { expect, test } from "@rstest/core";
 
-import { buildThreadSubmitMessages } from "@/core/threads/hooks";
+import {
+  buildThreadRunContext,
+  buildThreadSubmitMessages,
+} from "@/core/threads/hooks";
+
+const baseContext = {
+  mode: "flash" as const,
+  model_name: undefined,
+  reasoning_effort: undefined,
+};
+
+test("sends the Chinese UI locale in run context for title generation", () => {
+  expect(
+    buildThreadRunContext({
+      context: baseContext,
+      locale: "zh-CN",
+      threadId: "thread-zh",
+    }),
+  ).toMatchObject({
+    title_locale: "zh-CN",
+    thread_id: "thread-zh",
+  });
+});
+
+test("sends the English UI locale in run context for title generation", () => {
+  expect(
+    buildThreadRunContext({
+      context: baseContext,
+      locale: "en-US",
+      threadId: "thread-en",
+    }),
+  ).toMatchObject({
+    title_locale: "en-US",
+    thread_id: "thread-en",
+  });
+});
 
 test("builds thread submit messages with hidden sidecar context before the visible user message", () => {
   const hiddenContext = {

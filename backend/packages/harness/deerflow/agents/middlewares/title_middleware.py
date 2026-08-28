@@ -25,6 +25,12 @@ logger = logging.getLogger(__name__)
 _UPLOAD_BLOCK_RE = re.compile(r"<uploaded_files>[\s\S]*?</uploaded_files>\s*", re.IGNORECASE)
 _IMAGE_EXTENSIONS = frozenset({".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"})
 _IMAGE_CONTENT_TYPES = frozenset({"image", "image_url", "input_image"})
+_CHINESE_CHAR_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_LATIN_CHAR_RE = re.compile(r"[A-Za-z]")
+_TITLE_LOCALE_CONTEXT_KEY = "title_locale"
+_AUTO_TITLE_LANGUAGE = "auto"
+_CHINESE_TITLE_LANGUAGE = "zh"
+_ENGLISH_TITLE_LANGUAGE = "en"
 
 
 class TitleMiddlewareState(AgentState):
@@ -49,6 +55,86 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         if self._app_config is not None:
             return self._app_config.title
         return get_title_config()
+
+    @staticmethod
+    def _normalize_title_language(title_locale: object | None) -> str:
+        """Map the frontend locale to a language that title rules can enforce.
+
+        The locale is run-scoped input rather than application configuration:
+        users may change the UI language between conversations. Missing or
+        unsupported values keep the historical auto-detect behavior so callers
+        outside the web UI are not forced into a language unexpectedly.
+        """
+        if not isinstance(title_locale, str) or not title_locale.strip():
+            return _AUTO_TITLE_LANGUAGE
+
+        normalized = title_locale.strip().lower().replace("_", "-")
+        if normalized == "zh" or normalized.startswith("zh-"):
+            return _CHINESE_TITLE_LANGUAGE
+        if normalized == "en" or normalized.startswith("en-"):
+            return _ENGLISH_TITLE_LANGUAGE
+        return _AUTO_TITLE_LANGUAGE
+
+    @staticmethod
+    def _runtime_title_locale(runtime: Runtime) -> str | None:
+        context = getattr(runtime, "context", None)
+        if not isinstance(context, Mapping):
+            return None
+        title_locale = context.get(_TITLE_LOCALE_CONTEXT_KEY)
+        return title_locale if isinstance(title_locale, str) and title_locale.strip() else None
+
+    @staticmethod
+    def _title_matches_language(text: str, language: str) -> bool:
+        if not text:
+            return False
+        if language == _CHINESE_TITLE_LANGUAGE:
+            return bool(_CHINESE_CHAR_RE.search(text))
+        if language == _ENGLISH_TITLE_LANGUAGE:
+            # A Latin character is required, and a Han-only/mixed response is
+            # rejected when English is selected. This keeps a model that
+            # ignored the locale instruction from writing a Chinese title into
+            # an English user's history while still allowing names such as
+            # "Python API".
+            return bool(_LATIN_CHAR_RE.search(text)) and not bool(_CHINESE_CHAR_RE.search(text))
+        return True
+
+    @staticmethod
+    def _default_title(language: str) -> str:
+        if language == _CHINESE_TITLE_LANGUAGE:
+            return "新建会话"
+        return "New Conversation"
+
+    @staticmethod
+    def _image_default_title(language: str) -> str:
+        if language == _CHINESE_TITLE_LANGUAGE:
+            return "图片内容咨询"
+        if language == _ENGLISH_TITLE_LANGUAGE:
+            return "Image inquiry"
+        return "New Conversation"
+
+    @staticmethod
+    def _language_instruction(language: str) -> str:
+        if language == _CHINESE_TITLE_LANGUAGE:
+            return "请使用简体中文生成会话标题，即使用户问题或助手回答使用其他语言。标题要简洁概括用户意图，只输出标题，不要引号、解释、上传元数据或文件路径。"
+        if language == _ENGLISH_TITLE_LANGUAGE:
+            return (
+                "Generate the conversation title in English, even if the user's question or assistant answer "
+                "uses another language. Keep it concise and focused on the user's intent. Return only the title, "
+                "without quotes, explanation, upload metadata, or file paths."
+            )
+        return ""
+
+    @staticmethod
+    def _image_language_instruction(language: str) -> str:
+        if language == _CHINESE_TITLE_LANGUAGE:
+            return "本轮包含图片附件。请结合助手从图片中提取的具体信息，以及用户的问题或意图，生成简洁的中文标题；不要把上传元数据、文件路径或内部标记写入标题。"
+        if language == _ENGLISH_TITLE_LANGUAGE:
+            return (
+                "An image was uploaded. Summarize the concrete information extracted from the image in the assistant "
+                "answer together with the user's question or intent in a concise English title. Never include upload "
+                "metadata, file paths, or internal tags."
+            )
+        return "An image was uploaded. Summarize both the concrete information extracted from the image in the assistant answer and the user's question or intent. Never include upload metadata, file paths, or internal tags in the title."
 
     def _normalize_content(self, content: object) -> str:
         if isinstance(content, str):
@@ -187,11 +273,16 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
             )
         )
 
-    def _image_fallback_title(self, state: TitleMiddlewareState, user_msg: str) -> str:
-        """Keep both the question and extracted image information in a local fallback."""
+    def _image_fallback_title(
+        self,
+        state: TitleMiddlewareState,
+        user_msg: str,
+        title_locale: object | None = None,
+    ) -> str:
+        """Keep compatible question and image information in a local fallback."""
         assistant_msg = self._get_title_assistant_message(state)
         if not assistant_msg:
-            return self._fallback_title(user_msg)
+            return self._fallback_title(user_msg, title_locale)
 
         # The title model normally produces the semantic summary. If that call
         # is unavailable, use the first meaningful answer line and reserve space
@@ -200,6 +291,36 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         answer_line = re.sub(r"^[#>*+\-\d.\s]+", "", answer_line)
         answer_line = re.sub(r"[*_`]+", "", answer_line).strip()
 
+        language = self._normalize_title_language(title_locale)
+        if language == _AUTO_TITLE_LANGUAGE:
+            return self._image_fallback_title_auto(user_msg, answer_line)
+
+        # A local fallback cannot translate content. Keep only text that is
+        # already compatible with the selected UI language instead of leaking
+        # an opposite-language title when the title model is unavailable.
+        compatible_user_msg = user_msg if self._title_matches_language(user_msg, language) else ""
+        compatible_answer = answer_line if self._title_matches_language(answer_line, language) else ""
+        if not compatible_user_msg and not compatible_answer:
+            return self._image_default_title(language)
+        if not compatible_user_msg:
+            return self._fallback_title(compatible_answer, title_locale)
+        if not compatible_answer:
+            return self._fallback_title(compatible_user_msg, title_locale)
+
+        config = self._get_title_config()
+        limit = min(config.max_chars, 50)
+        separator = " · "
+        if not answer_line or limit <= len(separator) + 2:
+            return self._fallback_title(compatible_user_msg, title_locale)
+
+        user_limit = max(1, min(len(compatible_user_msg), limit // 2))
+        answer_limit = max(1, limit - len(separator) - user_limit)
+        user_part = compatible_user_msg[:user_limit].rstrip()
+        answer_part = compatible_answer[:answer_limit].rstrip()
+        return f"{user_part}{separator}{answer_part}"
+
+    def _image_fallback_title_auto(self, user_msg: str, answer_line: str) -> str:
+        """Preserve the legacy fallback when no UI locale was supplied."""
         config = self._get_title_config()
         limit = min(config.max_chars, 50)
         separator = " · "
@@ -214,7 +335,12 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         answer_part = answer_line[:answer_limit].rstrip()
         return f"{user_part}{separator}{answer_part}"
 
-    def _should_generate_title(self, state: TitleMiddlewareState, *, allow_partial_exchange: bool = False) -> bool:
+    def _should_generate_title(
+        self,
+        state: TitleMiddlewareState,
+        *,
+        allow_partial_exchange: bool = False,
+    ) -> bool:
         """Check if we should generate a title for this thread."""
         config = self._get_title_config()
         if not config.enabled:
@@ -242,7 +368,7 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         # before any AI chunk reaches the checkpoint.
         return len(user_messages) == 1 and (len(assistant_messages) >= 1 or allow_partial_exchange)
 
-    def _build_title_prompt(self, state: TitleMiddlewareState) -> tuple[str, str]:
+    def _build_title_prompt(self, state: TitleMiddlewareState, title_locale: object | None = None) -> tuple[str, str]:
         """Extract user/assistant messages and build the title prompt.
 
         Returns (prompt_string, user_msg) so callers can use user_msg as fallback.
@@ -251,34 +377,39 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         user_msg = self._get_title_user_message(state)
         assistant_msg = self._get_title_assistant_message(state)
 
+        language = self._normalize_title_language(title_locale)
         prompt = config.prompt_template.format(
             max_words=config.max_words,
             user_msg=user_msg[:500],
             assistant_msg=assistant_msg[:500],
         )
         if self._has_image_upload(state):
-            prompt = (
-                "An image was uploaded. Summarize both the concrete information extracted from the image "
-                "in the assistant answer and the user's question or intent. Never include upload metadata, "
-                "file paths, or internal tags in the title.\n\n"
-                f"{prompt}"
-            )
+            prompt = f"{self._image_language_instruction(language)}\n\n{prompt}"
+        language_instruction = self._language_instruction(language)
+        if language_instruction:
+            prompt = f"{language_instruction}\n\n{prompt}"
         return prompt, user_msg
 
     def _strip_think_tags(self, text: str) -> str:
         """Remove <think>...</think> blocks emitted by reasoning models (e.g. minimax, DeepSeek-R1)."""
         return re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
 
-    def _parse_title(self, content: object) -> str:
+    def _parse_title(self, content: object, title_locale: object | None = None) -> str:
         """Normalize model output into a clean title string."""
         config = self._get_title_config()
         title_content = self._normalize_content(content)
         title_content = self._strip_think_tags(title_content)
         title = title_content.strip().strip('"').strip("'")
+        language = self._normalize_title_language(title_locale)
+        if title and not self._title_matches_language(title, language):
+            return ""
         return title[: config.max_chars] if len(title) > config.max_chars else title
 
-    def _fallback_title(self, user_msg: str) -> str:
+    def _fallback_title(self, user_msg: str, title_locale: object | None = None) -> str:
         config = self._get_title_config()
+        language = self._normalize_title_language(title_locale)
+        if not self._title_matches_language(user_msg, language):
+            return self._default_title(language)
         fallback_chars = min(config.max_chars, 50)
         if len(user_msg) > fallback_chars:
             # Reserve room for the ellipsis so this path honours ``max_chars``
@@ -307,31 +438,37 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         ]
         return config
 
-    def _generate_title_result(self, state: TitleMiddlewareState, *, allow_partial_exchange: bool = False) -> dict | None:
+    def _generate_title_result(
+        self,
+        state: TitleMiddlewareState,
+        *,
+        allow_partial_exchange: bool = False,
+        title_locale: object | None = None,
+    ) -> dict | None:
         """Generate a local fallback title without blocking on an LLM call."""
         if not self._should_generate_title(state, allow_partial_exchange=allow_partial_exchange):
             return None
 
         user_msg = self._get_title_user_message(state)
         if self._has_image_upload(state) and not allow_partial_exchange:
-            return {"title": self._image_fallback_title(state, user_msg)}
-        return {"title": self._fallback_title(user_msg)}
+            return {"title": self._image_fallback_title(state, user_msg, title_locale)}
+        return {"title": self._fallback_title(user_msg, title_locale)}
 
-    async def _agenerate_title_result(self, state: TitleMiddlewareState) -> dict | None:
+    async def _agenerate_title_result(self, state: TitleMiddlewareState, title_locale: object | None = None) -> dict | None:
         """Generate a configured LLM title asynchronously and fall back locally."""
         if not self._should_generate_title(state):
             return None
 
         config = self._get_title_config()
         has_image_upload = self._has_image_upload(state)
-        if not config.model_name and not has_image_upload:
-            user_msg = self._get_title_user_message(state)
-            return {"title": self._fallback_title(user_msg)}
-
         user_msg = self._get_title_user_message(state)
+        language = self._normalize_title_language(title_locale)
+        needs_language_conversion = language != _AUTO_TITLE_LANGUAGE and bool(user_msg) and not self._title_matches_language(user_msg, language)
+        if not config.model_name and not has_image_upload and not needs_language_conversion:
+            return {"title": self._fallback_title(user_msg, title_locale)}
 
         try:
-            prompt, user_msg = self._build_title_prompt(state)
+            prompt, user_msg = self._build_title_prompt(state, title_locale)
             # attach_tracing=False because ``_get_runnable_config()`` inherits
             # the graph-level RunnableConfig (set in ``_make_lead_agent``) whose
             # callbacks already carry tracing handlers; binding them again at
@@ -341,19 +478,25 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
                 model_kwargs["app_config"] = self._app_config
             model = create_chat_model(name=config.model_name, **model_kwargs)
             response = await model.ainvoke(prompt, config=self._get_runnable_config())
-            title = self._parse_title(response.content)
+            title = self._parse_title(response.content, title_locale)
             if title:
                 return {"title": title}
         except Exception:
             logger.debug("Failed to generate async title; falling back to local title", exc_info=True)
         if has_image_upload:
-            return {"title": self._image_fallback_title(state, user_msg)}
-        return {"title": self._fallback_title(user_msg)}
+            return {"title": self._image_fallback_title(state, user_msg, title_locale)}
+        return {"title": self._fallback_title(user_msg, title_locale)}
 
     @override
     def after_model(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | None:
-        return self._generate_title_result(state)
+        title_locale = self._runtime_title_locale(runtime)
+        if title_locale is None:
+            return self._generate_title_result(state)
+        return self._generate_title_result(state, title_locale=title_locale)
 
     @override
     async def aafter_model(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | None:
-        return await self._agenerate_title_result(state)
+        title_locale = self._runtime_title_locale(runtime)
+        if title_locale is None:
+            return await self._agenerate_title_result(state)
+        return await self._agenerate_title_result(state, title_locale=title_locale)

@@ -9,8 +9,13 @@
 使用 `TitleMiddleware` 在 `after_model` 钩子中：
 1. 检测是否是首次对话（1个用户消息 + 1个助手回复）
 2. 检查 state 是否已有 title
-3. 默认从首条用户消息生成本地 fallback 标题，避免在流式回复结束前额外等待一次 LLM 调用；显式配置 `model_name` 时才调用 LLM 生成标题（默认最多6个词）
+3. 默认从首条用户消息生成本地 fallback 标题，避免在流式回复结束前额外等待一次 LLM 调用；需要跨语言转换、处理图片或显式配置 `model_name` 时调用 LLM 生成标题（默认最多6个词）
 4. 将 title 存储到 `ThreadState` 中（会被 checkpointer 持久化）
+
+前端会把当前界面语言作为本轮运行上下文的 `title_locale` 传入：`zh-CN` 生成中文标题，
+`en-US` 生成英文标题。消息本身已经符合目标语言时继续使用快速本地 fallback；消息语言与
+界面语言不一致时，即使 `model_name` 未配置，也会调用默认模型完成语言转换。图片问答使用
+相同的语言规则。没有传入 `title_locale` 的非 Web 客户端继续使用原有的内容语言行为。
 
 TitleMiddleware 会先把 LangChain message content 里的结构化 block/list 内容归一化为纯文本，再拼到 title prompt 里，避免把 Python/JSON 的原始 repr 泄漏到标题生成模型。
 
@@ -158,8 +163,10 @@ sequenceDiagram
     Agent-->>LangGraph: 返回回复
     LangGraph->>TitleMiddleware: after_model()/aafter_model()
     TitleMiddleware->>TitleMiddleware: 检查是否需要生成 title
-    alt title.model_name 为空（默认）
+    alt title.model_name 为空且消息已符合 title_locale
         TitleMiddleware->>TitleMiddleware: 从首条用户消息生成本地 fallback title
+    else title.model_name 为空但需要语言转换，或包含图片
+        TitleMiddleware->>TitleModel: 按 title_locale 生成 LLM title
     else 显式配置 title.model_name
         TitleMiddleware->>TitleModel: 生成 LLM title
         TitleModel-->>TitleMiddleware: 返回 title
@@ -182,9 +189,9 @@ sequenceDiagram
 ## 注意事项
 
 1. **读取方式不同**：Title 在 `state.values.title` 而非 `thread.metadata.title`
-2. **性能考虑**：默认配置不调用标题模型；只有显式配置 `title.model_name` 时，才会在首轮回复后额外等待一次 LLM title 生成
+2. **性能考虑**：默认配置对已经符合界面语言的文本不调用标题模型；跨语言文本和图片问答会调用一次默认模型，显式配置 `title.model_name` 时则按配置调用标题模型
 3. **并发安全**：middleware 在 agent 首次完整回复后更新 state，不需要客户端额外请求
-4. **Fallback 策略**：默认使用用户消息前几个字符作为 title；如果显式启用的 LLM 调用失败，也会回退到该策略
+4. **Fallback 策略**：默认使用用户消息前几个字符作为 title；如果显式指定了界面语言，fallback 会拒绝明显的反向语言，并使用对应语言的默认标题或兼容的回答摘要
 
 ## 测试
 
@@ -231,17 +238,28 @@ uv run pytest tests/test_title_middleware_core_logic.py tests/test_title_generat
 # TitleMiddleware 核心逻辑
 @override
 async def aafter_model(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | None:
-    return await self._agenerate_title_result(state)
+    title_locale = runtime.context.get("title_locale") if runtime.context else None
+    return await self._agenerate_title_result(state, title_locale=title_locale)
 
-async def _agenerate_title_result(self, state: TitleMiddlewareState) -> dict | None:
+async def _agenerate_title_result(self, state: TitleMiddlewareState, title_locale: str | None = None) -> dict | None:
     if not self._should_generate_title(state):
         return None
 
     config = self._get_title_config()
-    if not config.model_name:
+    user_msg = self._get_title_user_message(state)
+    has_image_upload = self._has_image_upload(state)
+    language = self._normalize_title_language(title_locale)
+    needs_language_conversion = (
+        language != "auto"
+        and bool(user_msg)
+        and not self._title_matches_language(user_msg, language)
+    )
+    # A matching locale uses the fast local fallback. Cross-language text,
+    # images, and an explicitly configured title model use the LLM path.
+    if not config.model_name and not has_image_upload and not needs_language_conversion:
         return self._generate_title_result(state)
 
-    # 显式配置 title.model_name 时才调用标题模型；失败会回退到本地 title。
+    # 生成结果会按 title_locale 校验；失败会回退到对应语言的本地 title。
     ...
 ```
 
