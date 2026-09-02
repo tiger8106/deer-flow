@@ -370,10 +370,12 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   }
 
   return (
+    // The separator enlarges its pointer target outside the grid edge. Clip
+    // that hit area so it cannot create a document-level horizontal scrollbar.
     <div
       id={`${resizableIdBase}-panels`}
       className={cn(
-        "[container-type:inline-size] relative grid size-full min-h-0 transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        "[container-type:inline-size] relative grid size-full min-h-0 overflow-x-clip transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
         isResizingPreview && "transition-none",
         rightPanelOpen
           ? "grid-cols-[minmax(0,1fr)_1px_minmax(0,40%)]"

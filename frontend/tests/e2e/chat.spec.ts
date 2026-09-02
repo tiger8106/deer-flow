@@ -1,10 +1,34 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   handleRunStream,
   mockLangGraphAPI,
   MOCK_THREAD_ID,
 } from "./utils/mock-api";
+
+async function expectNoWorkspaceOuterScrollbars(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const root = document.documentElement;
+          const body = document.body;
+          return {
+            documentHorizontalOverflow: root.scrollWidth - root.clientWidth,
+            documentVerticalOverflow: root.scrollHeight - root.clientHeight,
+            bodyHorizontalOverflow: body.scrollWidth - body.clientWidth,
+            bodyVerticalOverflow: body.scrollHeight - body.clientHeight,
+          };
+        }),
+      { timeout: 10_000 },
+    )
+    .toEqual({
+      documentHorizontalOverflow: 0,
+      documentVerticalOverflow: 0,
+      bodyHorizontalOverflow: 0,
+      bodyVerticalOverflow: 0,
+    });
+}
 
 test.describe("Chat workspace", () => {
   test.beforeEach(async ({ page }) => {
@@ -17,6 +41,7 @@ test.describe("Chat workspace", () => {
     const textarea = page.getByPlaceholder(/how can i assist you/i);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: /load more/i })).toBeHidden();
+    await expectNoWorkspaceOuterScrollbars(page);
   });
 
   test("can type a message in the input box", async ({ page }) => {
@@ -445,6 +470,8 @@ test.describe("Chat workspace", () => {
     });
 
     await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
+
+    await expectNoWorkspaceOuterScrollbars(page);
 
     const scrollElement = page
       .getByTestId("main-message-list")

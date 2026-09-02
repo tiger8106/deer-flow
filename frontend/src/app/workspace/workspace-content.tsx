@@ -38,12 +38,13 @@ export async function WorkspaceContent({
     <QueryClientProvider>
       <ToolDisplayLabelsProvider labels={toolDisplayLabels}>
         <WorkspaceAppsProvider apps={workspaceApps}>
+          {/* Workspace pages own their scroll containers; keep the shell viewport-bound. */}
           <SidebarProvider
-            className="h-screen"
+            className="h-screen min-h-0 overflow-hidden"
             defaultOpen={initialSidebarOpen}
           >
             <WorkspaceSidebar workspaceApps={workspaceApps} />
-            <SidebarInset className="min-w-0">
+            <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
               <GatewayOfflineBanner gatewayUnavailable={gatewayUnavailable} />
               {children}
             </SidebarInset>
