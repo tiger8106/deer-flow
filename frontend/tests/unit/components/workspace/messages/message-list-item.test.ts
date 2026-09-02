@@ -1,5 +1,6 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import { describe, expect, it } from "@rstest/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -40,6 +41,42 @@ describe("MessageListItem uploaded images", () => {
 
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('aria-label="预览: 现场照片.png"');
+    expect(html).not.toContain('target="_blank"');
+    expect(html).not.toContain('<a href="');
+  });
+
+  it("opens images in assistant answers in the current-window dialog", () => {
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        {
+          client: queryClient,
+        },
+        createElement(
+          I18nContext.Provider,
+          {
+            value: {
+              locale: "zh-CN",
+              setLocale: () => undefined,
+            },
+          },
+          createElement(MessageListItem, {
+            message: {
+              id: "assistant-image",
+              type: "ai",
+              content: "![流程图](/mnt/user-data/outputs/流程图.png)",
+              additional_kwargs: {},
+            } as Message,
+            threadId: "thread-1",
+            showCopyButton: false,
+          }),
+        ),
+      ),
+    );
+
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('aria-label="预览: 流程图"');
     expect(html).not.toContain('target="_blank"');
     expect(html).not.toContain('<a href="');
   });

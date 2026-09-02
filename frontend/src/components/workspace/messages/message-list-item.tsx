@@ -214,6 +214,8 @@ function MessageImage({
   artifactPaths: readonly string[];
   maxWidth?: string;
 }) {
+  const { t } = useI18n();
+
   if (!src) return null;
 
   const imgClassName = cn("overflow-hidden rounded-lg", `max-w-[${maxWidth}]`);
@@ -225,9 +227,12 @@ function MessageImage({
   const url = resolveMessageImageURL(src, threadId, artifactPaths);
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer">
-      <img className={imgClassName} src={url} alt={alt} {...props} />
-    </a>
+    <UploadedImagePreview
+      src={url}
+      alt={alt ?? ""}
+      previewLabel={t.common.preview}
+      className={imgClassName}
+    />
   );
 }
 
