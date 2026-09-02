@@ -17,6 +17,7 @@ import {
   type MouseEvent,
 } from "react";
 import { toast } from "sonner";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 
 import {
   Conversation,
@@ -98,6 +99,13 @@ const SELECTION_TOOLBAR_MARGIN = 8;
 // to decide whether the toolbar fits above the selection; exact height isn't
 // needed because we flip below when space is tight.
 const SELECTION_TOOLBAR_ESTIMATED_HEIGHT = 48;
+
+export function shouldScrollToLatestOnSubmit(
+  wasSubmitting: boolean,
+  isSubmitting: boolean,
+): boolean {
+  return isSubmitting && !wasSubmitting;
+}
 
 type SelectionToolbarState = {
   context: SidecarContext;
@@ -209,6 +217,25 @@ function LoadMoreHistoryIndicator({
       </Button>
     </div>
   );
+}
+
+function ScrollToLatestOnSubmit({ isSubmitting }: { isSubmitting: boolean }) {
+  const { scrollToBottom } = useStickToBottomContext();
+  const wasSubmitting = useRef(isSubmitting);
+
+  useEffect(() => {
+    const submissionStarted = shouldScrollToLatestOnSubmit(
+      wasSubmitting.current,
+      isSubmitting,
+    );
+    wasSubmitting.current = isSubmitting;
+
+    if (submissionStarted) {
+      void scrollToBottom("smooth");
+    }
+  }, [isSubmitting, scrollToBottom]);
+
+  return null;
 }
 
 export function MessageList({
@@ -703,6 +730,7 @@ export function MessageList({
         initial={initialScroll}
         resize={resizeScroll}
       >
+        <ScrollToLatestOnSubmit isSubmitting={thread.isLoading} />
         <ConversationContent className="mx-auto w-full max-w-(--container-width-md) gap-8 pt-8">
           <LoadMoreHistoryIndicator
             isLoading={isHistoryLoading}

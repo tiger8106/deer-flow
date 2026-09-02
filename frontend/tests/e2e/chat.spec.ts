@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-import { handleRunStream, mockLangGraphAPI } from "./utils/mock-api";
+import {
+  handleRunStream,
+  mockLangGraphAPI,
+  MOCK_THREAD_ID,
+} from "./utils/mock-api";
 
 test.describe("Chat workspace", () => {
   test.beforeEach(async ({ page }) => {
@@ -398,6 +402,90 @@ test.describe("Chat workspace", () => {
     await expect(page.getByText("Hello from Tiger!")).toBeVisible({
       timeout: 10_000,
     });
+  });
+
+  test("scrolls to the latest message when sending from an earlier position", async ({
+    page,
+  }) => {
+    const historyMessages = Array.from({ length: 12 }, (_, index) => [
+      {
+        type: "human",
+        id: `history-human-${index}`,
+        content: [
+          {
+            type: "text",
+            text: `Historical question ${index} ${"with enough content to overflow the conversation viewport ".repeat(4)}`,
+          },
+        ],
+      },
+      {
+        type: "ai",
+        id: `history-ai-${index}`,
+        content: `Historical answer ${index} ${"with enough content to overflow the conversation viewport ".repeat(4)}`,
+      },
+    ]).flat();
+
+    mockLangGraphAPI(page, {
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Scrollable conversation",
+          messages: historyMessages,
+        },
+      ],
+    });
+    await page.route("**/api/langgraph/threads/*/runs/stream", (route) => {
+      const body = route.request().postDataJSON() as {
+        input?: { messages?: unknown[] };
+      };
+      return handleRunStream(route, {}, [
+        ...historyMessages,
+        ...(body.input?.messages ?? []),
+      ]);
+    });
+
+    await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
+
+    const scrollElement = page
+      .getByTestId("main-message-list")
+      .locator(":scope > div")
+      .first();
+    await page.waitForFunction(() => {
+      const root = document.querySelector('[data-testid="main-message-list"]');
+      const scroll = root?.firstElementChild;
+      return (
+        scroll instanceof HTMLElement &&
+        scroll.clientHeight > 0 &&
+        scroll.scrollHeight > scroll.clientHeight
+      );
+    });
+    await scrollElement.evaluate((element) => {
+      const scroll = element as HTMLElement;
+      scroll.scrollTop = 0;
+      scroll.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await page.waitForTimeout(30);
+    await expect
+      .poll(() => scrollElement.evaluate((element) => element.scrollTop))
+      .toBe(0);
+
+    const textarea = page.getByPlaceholder(/how can i assist you/i);
+    await textarea.fill("A new question");
+    await textarea.press("Enter");
+
+    await expect(page.getByText("Hello from Tiger!")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect
+      .poll(
+        () =>
+          scrollElement.evaluate(
+            (element) =>
+              element.scrollHeight - element.scrollTop - element.clientHeight,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBeLessThan(5);
   });
 
   test("blocks suggestion template placeholders until replaced", async ({
