@@ -6,9 +6,7 @@ const THREAD_ID = "00000000-0000-0000-0000-000000000321";
 const RUN_ID = "run-workspace-changes";
 
 test.describe("Workspace changes", () => {
-  test("shows changed files badge and opens the diff panel", async ({
-    page,
-  }) => {
+  test("does not show edited files in the conversation", async ({ page }) => {
     const includeDiffValues: string[] = [];
     mockLangGraphAPI(page, {
       threads: [
@@ -97,27 +95,9 @@ test.describe("Workspace changes", () => {
 
     await page.goto(`/workspace/chats/${THREAD_ID}`);
 
-    await expect(page.getByText("Edited 2 files")).toBeVisible({
-      timeout: 15_000,
-    });
-    // The human prompt carries the same run_id, but the badge must only render
-    // under the assistant turn — never under the user's message.
-    await expect(page.getByText("Edited 2 files")).toHaveCount(1);
-    await expect(page.getByText("outputs/report.md")).toBeVisible();
-    await expect(page.getByText("notes.txt")).toBeVisible();
-    expect(includeDiffValues).toContain("false");
-
-    await page.getByRole("button", { name: "View changes" }).click();
-    await expect(
-      page.getByRole("heading", { name: /workspace changes/i }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", {
-        name: /\/mnt\/user-data\/outputs\/report\.md/i,
-      }),
-    ).toBeVisible();
-    expect(includeDiffValues).toContain("true");
-    await expect(page.getByText("+Ready")).toBeVisible();
-    await expect(page.getByText("-Draft")).toBeVisible();
+    await expect(page.getByText("Edited 2 files")).toHaveCount(0);
+    await expect(page.getByText("outputs/report.md")).toHaveCount(0);
+    await expect(page.getByText("notes.txt")).toHaveCount(0);
+    expect(includeDiffValues).toEqual([]);
   });
 });

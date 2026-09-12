@@ -12,6 +12,8 @@ const MARKDOWN_THREAD_ID = "00000000-0000-0000-0000-000000003121";
 const MARKDOWN_ANCHOR_THREAD_ID = "00000000-0000-0000-0000-000000003123";
 const JSON_THREAD_ID = "00000000-0000-0000-0000-000000003122";
 const PRESENTED_THREAD_ID = "00000000-0000-0000-0000-000000003123";
+const STATE_ARTIFACT_THREAD_ID = "00000000-0000-0000-0000-000000003124";
+const STATE_ARTIFACT_PATH = "/mnt/user-data/outputs/deck.pptx";
 
 function writeFileMessages({
   path = ARTIFACT_PATH,
@@ -79,6 +81,11 @@ function presentFilesMessages() {
           },
         },
       ],
+    },
+    {
+      type: "ai",
+      id: "msg-ai-present-file-final",
+      content: "The report is ready.",
     },
   ];
 }
@@ -319,5 +326,42 @@ test.describe("Artifact preview stability", () => {
     await expect(presentedOption).toBeVisible();
     await presentedOption.click();
     await expect(artifactsPanel.getByText("Presented Report")).toBeVisible();
+  });
+
+  test("renders generated thread artifacts after the conversation body", async ({
+    page,
+  }) => {
+    mockLangGraphAPI(page, {
+      threads: [
+        {
+          thread_id: STATE_ARTIFACT_THREAD_ID,
+          title: "Generated presentation",
+          messages: [
+            {
+              type: "human",
+              id: "msg-human-state-artifact",
+              content: [{ type: "text", text: "制作PPT" }],
+            },
+            {
+              type: "ai",
+              id: "msg-ai-state-artifact",
+              content: "PPT已生成并完成检查。",
+            },
+          ],
+          artifacts: [STATE_ARTIFACT_PATH],
+        },
+      ],
+    });
+
+    await page.goto(`/workspace/chats/${STATE_ARTIFACT_THREAD_ID}`);
+
+    const artifacts = page.getByTestId("conversation-artifacts");
+    await expect(artifacts).toBeVisible({ timeout: 15_000 });
+    await expect(artifacts.getByText("deck.pptx")).toBeVisible();
+
+    const bodyText = await page.locator("body").innerText();
+    expect(bodyText.indexOf("PPT已生成并完成检查。")).toBeLessThan(
+      bodyText.indexOf("deck.pptx"),
+    );
   });
 });

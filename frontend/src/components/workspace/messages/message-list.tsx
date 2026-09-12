@@ -107,6 +107,28 @@ export function shouldScrollToLatestOnSubmit(
   return isSubmitting && !wasSubmitting;
 }
 
+export function getArtifactPathsForDisplay(
+  artifactPaths: readonly string[],
+  messages: readonly Message[],
+): string[] {
+  const paths = new Set(artifactPaths);
+
+  // A present_files tool call can reach the client before its Command update
+  // has been folded into thread.values.artifacts. Keep the file card visible
+  // during that short window, while the state remains the source of truth for
+  // artifacts from tools that publish files without a present_files call.
+  for (const message of messages) {
+    if (!hasPresentFiles(message)) {
+      continue;
+    }
+    for (const path of extractPresentFilesFromMessage(message)) {
+      paths.add(path);
+    }
+  }
+
+  return [...paths];
+}
+
 type SelectionToolbarState = {
   context: SidecarContext;
   x: number;
@@ -760,7 +782,10 @@ export function MessageList({
     return <MessageListSkeleton />;
   }
 
-  const artifactPaths = extractArtifactsFromThread(thread);
+  const artifactPaths = getArtifactPathsForDisplay(
+    extractArtifactsFromThread(thread),
+    messages,
+  );
 
   return (
     <>
@@ -920,13 +945,6 @@ export function MessageList({
               }
               return null;
             } else if (group.type === "assistant:present-files") {
-              const files: string[] = [];
-              for (const message of group.messages) {
-                if (hasPresentFiles(message)) {
-                  const presentFiles = extractPresentFilesFromMessage(message);
-                  files.push(...presentFiles);
-                }
-              }
               return (
                 <div className="w-full" key={group.id}>
                   {group.messages[0] && hasContent(group.messages[0]) && (
@@ -937,7 +955,6 @@ export function MessageList({
                       className="mb-4"
                     />
                   )}
-                  <ArtifactFileList files={files} threadId={threadId} />
                   {renderTokenUsage({
                     messages: group.messages,
                     turnUsageMessages,
@@ -1073,6 +1090,11 @@ export function MessageList({
               <Reasoning isStreaming={true} startTimeProp={turnStartTime}>
                 <ReasoningTrigger hasContent={false} />
               </Reasoning>
+            </div>
+          )}
+          {artifactPaths.length > 0 && (
+            <div className="w-full" data-testid="conversation-artifacts">
+              <ArtifactFileList files={artifactPaths} threadId={threadId} />
             </div>
           )}
           <div style={{ height: `${paddingBottom}px` }} />

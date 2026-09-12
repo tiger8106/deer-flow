@@ -61,7 +61,6 @@ import { useSkills } from "@/core/skills/hooks";
 import { SafeReasoningContent } from "@/core/streamdown/components";
 import { cn } from "@/lib/utils";
 
-import { WorkspaceChangeBadge } from "../changes";
 import { CitationSourcesPanel } from "../citations/citation-sources-panel";
 import { CopyButton } from "../copy-button";
 import { FullscreenDialogCloseButton } from "../fullscreen-dialog-close-button";
@@ -171,7 +170,6 @@ export function MessageListItem({
         isLoading={isLoading}
         threadId={threadId}
         artifactPaths={artifactPaths}
-        runId={runId}
         turnStartTime={turnStartTime}
       />
       {!isLoading && showCopyButton && (
@@ -280,7 +278,6 @@ function MessageContent_({
   isLoading = false,
   threadId,
   artifactPaths,
-  runId,
   turnStartTime,
 }: {
   className?: string;
@@ -288,7 +285,6 @@ function MessageContent_({
   isLoading?: boolean;
   threadId: string;
   artifactPaths: readonly string[];
-  runId?: string;
   turnStartTime?: number | null;
 }) {
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
@@ -479,13 +475,6 @@ function MessageContent_({
         components={components}
       />
       <CitationSourcesPanel sources={citationSources} />
-      {message.type === "ai" && (
-        <WorkspaceChangeBadge
-          threadId={threadId}
-          runId={runId}
-          disabled={isLoading}
-        />
-      )}
     </AIElementMessageContent>
   );
 }
