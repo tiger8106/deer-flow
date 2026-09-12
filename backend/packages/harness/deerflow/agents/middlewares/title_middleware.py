@@ -317,7 +317,8 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         answer_limit = max(1, limit - len(separator) - user_limit)
         user_part = compatible_user_msg[:user_limit].rstrip()
         answer_part = compatible_answer[:answer_limit].rstrip()
-        return f"{user_part}{separator}{answer_part}"
+        candidate = f"{user_part}{separator}{answer_part}"
+        return candidate if self._title_matches_language(candidate, language) else self._image_default_title(language)
 
     def _image_fallback_title_auto(self, user_msg: str, answer_line: str) -> str:
         """Preserve the legacy fallback when no UI locale was supplied."""
@@ -403,7 +404,8 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         language = self._normalize_title_language(title_locale)
         if title and not self._title_matches_language(title, language):
             return ""
-        return title[: config.max_chars] if len(title) > config.max_chars else title
+        title = title[: config.max_chars]
+        return title if self._title_matches_language(title, language) else ""
 
     def _fallback_title(self, user_msg: str, title_locale: object | None = None) -> str:
         config = self._get_title_config()
@@ -416,7 +418,8 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
             # exactly as ``_parse_title`` does on the model path.
             ellipsis = "..."
             body = min(fallback_chars, config.max_chars - len(ellipsis))
-            return user_msg[:body].rstrip() + ellipsis
+            candidate = user_msg[:body].rstrip() + ellipsis
+            return candidate if self._title_matches_language(candidate, language) else self._default_title(language)
         return user_msg if user_msg else "New Conversation"
 
     def _get_runnable_config(self) -> dict[str, Any]:
