@@ -574,6 +574,15 @@ models:
 # ============================================================================
 # Define groups of tools for organization and access control
 
+# Example: image-generation model entry. The image skill selects this by name
+# from tiger.image_generation.model; credentials and provider settings stay here.
+# - name: minimax-image-01
+#   display_name: MiniMax Image-01
+#   provider: minimax
+#   model: image-01
+#   api_key: $MINIMAX_API_KEY
+#   base_url: https://api.minimaxi.com/v1
+
 tool_groups:
   - name: web
   - name: file:read
