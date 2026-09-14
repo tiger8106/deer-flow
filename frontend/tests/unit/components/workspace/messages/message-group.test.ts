@@ -65,50 +65,24 @@ describe("MessageGroup", () => {
     expect(html).toContain("Processing");
   });
 
-  it("uses configured friendly labels for external tool activity", () => {
+  it.each([
+    ["knowledge_query", "Knowledge search"],
+    ["view_image", "Image recognition"],
+  ])("uses a configured friendly label for %s", (name, label) => {
+    // Only the latest activity is visible in a collapsed processing group.
     const html = renderGroup(
       [
         {
-          id: "ai-knowledge-tool",
+          id: "ai-tool",
           type: "ai",
           content: "",
-          tool_calls: [
-            {
-              id: "call-knowledge-tool",
-              name: "knowledge_query",
-              args: {},
-            },
-          ],
-        },
-        {
-          id: "ai-image-tool",
-          type: "ai",
-          content: "",
-          tool_calls: [
-            {
-              id: "call-image-tool",
-              name: "view_image",
-              args: {},
-            },
-          ],
-        },
-      ] as Message[],
-      {
-        knowledge_query: {
-          "en-US": "Knowledge search",
-          "zh-CN": "知识库查询",
-        },
-        view_image: {
-          "en-US": "Image recognition",
-          "zh-CN": "图片识别",
-        },
-      },
+          tool_calls: [{ id: "call-tool", name, args: {} }],
+        } as Message,
+      ],
+      { [name]: { "en-US": label, "zh-CN": label } },
     );
-
-    expect(html).toContain("Knowledge search");
-    expect(html).toContain("Image recognition");
-    expect(html).not.toContain("knowledge_query");
-    expect(html).not.toContain("view_image");
+    expect(html).toContain(label);
+    expect(html).not.toContain(name);
   });
 
   it("keeps assistant text visible while older tool steps stay collapsed", () => {
@@ -204,11 +178,12 @@ function renderGroup(
           setLocale: () => undefined,
         },
       },
-      createElement(
-        ToolDisplayLabelsProvider,
-        { labels: toolDisplayLabels },
-        createElement(MessageGroup, { messages }),
-      ),
+      // React.createElement's overload requires this provider's children in props.
+      // eslint-disable-next-line react/no-children-prop
+      createElement(ToolDisplayLabelsProvider, {
+        labels: toolDisplayLabels,
+        children: createElement(MessageGroup, { messages }),
+      }),
     ),
   );
 }

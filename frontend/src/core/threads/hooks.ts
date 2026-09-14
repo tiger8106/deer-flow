@@ -470,93 +470,65 @@ export function mergeMessages(
     }
   }
 
-  const threadMessageIds = new Set(
-    threadMessages
-      .filter((message) => !isHiddenFromUIMessage(message))
-      .map(messageIdentity)
-      .filter(isNonEmptyString),
-  );
-
-  // A checkpoint can retain messages that are older than the first loaded
-  // history page after context compaction.  Values frames carry the persisted
-  // thread seq, so keep those messages before the paged window instead of
-  // appending them after the latest history page.
-  const historySeqByIdentity = new Map<string, number>();
-  for (const message of historyMessages) {
-    const identity = messageIdentity(message);
-    const seq = messageSeq(message);
-    if (identity && seq !== undefined && !historySeqByIdentity.has(identity)) {
-      historySeqByIdentity.set(identity, seq);
-    }
-  }
-  const threadMessagesWithSeq = threadMessages.map((message) => {
-    if (messageSeq(message) !== undefined) {
-      return message;
-    }
-    const identity = messageIdentity(message);
-    const seq = identity ? historySeqByIdentity.get(identity) : undefined;
-    if (seq === undefined) {
-      return message;
-    }
-    return {
-      ...message,
-      additional_kwargs: {
-        ...message.additional_kwargs,
-        deerflow_seq: seq,
-      },
-    } as Message;
-  });
-  const canonicalMinSeq = historyMessages.reduce<number | undefined>(
-    (minimum, message) => {
-      const seq = messageSeq(message);
-      if (seq === undefined) {
-        return minimum;
-      }
-      return minimum === undefined ? seq : Math.min(minimum, seq);
-    },
-    undefined,
-  );
-  const messagesBeforeHistoryWindow =
-    canonicalMinSeq === undefined
-      ? []
-      : threadMessagesWithSeq
-          .filter((message) => {
-            const seq = messageSeq(message);
-            return seq !== undefined && seq < canonicalMinSeq;
-          })
-          .sort((left, right) => messageSeq(left)! - messageSeq(right)!);
-  const messagesInHistoryWindow = threadMessagesWithSeq.filter((message) => {
-    const seq = messageSeq(message);
-    return (
-      canonicalMinSeq === undefined ||
-      seq === undefined ||
-      seq >= canonicalMinSeq
-    );
-  });
-
-  // The overlap is a contiguous suffix of historyMessages (newest history == oldest thread).
-  // Scan from the end: shrink cutoff while messages are already in thread, stop as soon as
-  // we hit one that isn't — everything before that point is non-overlapping.
-  let cutoff = historyMessages.length;
-  for (let i = historyMessages.length - 1; i >= 0; i--) {
-    const msg = historyMessages[i];
-    if (!msg) {
-      continue;
-    }
-    const identity = messageIdentity(msg);
-    if (identity && threadMessageIds.has(identity)) {
-      cutoff = i;
-    } else {
-      break;
-    }
-  }
-
-  const merged = dedupeMessagesByIdentity([
-    ...messagesBeforeHistoryWindow,
-    ...historyMessages.slice(0, cutoff),
-    ...messagesInHistoryWindow,
+  // Checkpoints can omit intermediate reasoning/tool messages after compaction.
+  // Replacing their shared human/answer messages by appending them would strand
+  // history-only steps at the top. Keep canonical positions and overlay content.
+  const merged = dedupeMessagesByIdentity(historyMessages).slice();
+  const live = dedupeMessagesByIdentity([
+    ...threadMessages,
     ...optimisticMessages,
   ]);
+  for (const [index, message] of live.entries()) {
+    const identity = messageIdentity(message);
+    const existingIndex = identity
+      ? merged.findIndex((item) => messageIdentity(item) === identity)
+      : -1;
+    if (existingIndex >= 0) {
+      const existing = merged[existingIndex]!;
+      if (isHiddenFromUIMessage(message) && !isHiddenFromUIMessage(existing)) {
+        continue;
+      }
+      const seq = messageSeq(existing);
+      merged[existingIndex] =
+        seq !== undefined && messageSeq(message) === undefined
+          ? ({
+              ...message,
+              additional_kwargs: {
+                ...message.additional_kwargs,
+                deerflow_seq: seq,
+              },
+            } as Message)
+          : message;
+      continue;
+    }
+
+    // Persisted sequence numbers place older checkpoint entries before a paged
+    // history window. Legacy/live entries without seq use the next shared
+    // message as an anchor; brand-new turns remain at the end.
+    const seq = messageSeq(message);
+    let insertionIndex =
+      seq === undefined
+        ? -1
+        : merged.findIndex((item) => {
+            const nextSeq = messageSeq(item);
+            return nextSeq !== undefined && nextSeq > seq;
+          });
+    if (insertionIndex < 0 && seq === undefined) {
+      for (const next of live.slice(index + 1)) {
+        const nextIdentity = messageIdentity(next);
+        if (!nextIdentity) continue;
+        insertionIndex = merged.findIndex(
+          (item) => messageIdentity(item) === nextIdentity,
+        );
+        if (insertionIndex >= 0) break;
+      }
+    }
+    merged.splice(
+      insertionIndex < 0 ? merged.length : insertionIndex,
+      0,
+      message,
+    );
+  }
 
   return merged.map((message) => {
     const identity = messageIdentity(message);

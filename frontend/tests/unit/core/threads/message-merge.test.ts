@@ -917,3 +917,79 @@ test("full summarization rescue pipeline keeps the conversation when history sta
     "ai-2",
   ]);
 });
+
+test("compacted checkpoints keep history-only reasoning inside each human turn", () => {
+  const history = [
+    { id: "h1", type: "human", content: "first question" },
+    {
+      id: "r1",
+      type: "ai",
+      content: "",
+      additional_kwargs: { reasoning_content: "first reasoning" },
+    },
+    { id: "a1", type: "ai", content: "first answer" },
+    { id: "h2", type: "human", content: "second question" },
+    {
+      id: "r2",
+      type: "ai",
+      content: "",
+      additional_kwargs: { reasoning_content: "second reasoning" },
+    },
+    { id: "a2", type: "ai", content: "second answer" },
+  ] as Message[];
+  const checkpoint = [
+    history[0]!,
+    history[2]!,
+    history[3]!,
+    { ...history[5]!, content: "updated answer" },
+  ] as Message[];
+  for (const withSeq of [false, true]) {
+    const rows = withSeq
+      ? history.map(
+          (message, index) =>
+            ({
+              ...message,
+              additional_kwargs: {
+                ...message.additional_kwargs,
+                deerflow_seq: index + 1,
+              },
+            }) as Message,
+        )
+      : history;
+    const merged = mergeMessages(rows, checkpoint, []);
+    expect(merged.map((message) => message.id)).toEqual(
+      history.map((message) => message.id),
+    );
+    expect(merged.at(-1)?.content).toBe("updated answer");
+    expect(history.at(-1)?.content).toBe("second answer");
+  }
+});
+
+test("missing live steps are inserted before their next shared answer", () => {
+  const human = { id: "h", type: "human", content: "question" } as Message;
+  const answer = { id: "a", type: "ai", content: "answer" } as Message;
+  const reasoning = {
+    id: "r",
+    type: "ai",
+    content: "",
+    additional_kwargs: { reasoning_content: "thinking" },
+  } as Message;
+  const tool = {
+    id: "t",
+    type: "tool",
+    tool_call_id: "call",
+    content: "evidence",
+  } as Message;
+  const nextHuman = {
+    id: "next",
+    type: "human",
+    content: "next question",
+  } as Message;
+  expect(
+    mergeMessages(
+      [human, answer],
+      [human, reasoning, tool, answer],
+      [nextHuman],
+    ).map((message) => message.id),
+  ).toEqual(["h", "r", "t", "a", "next"]);
+});

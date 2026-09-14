@@ -150,3 +150,5 @@ src/
 ## License
 
 MIT License. See [LICENSE](../LICENSE) for details.
+
+Conversation history preserves the persisted position of reasoning and tool steps when checkpoint compaction retains only the surrounding human messages and answers. Live content updates replace shared messages in place.
