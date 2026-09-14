@@ -578,6 +578,7 @@ models:
 # from tiger.image_generation.model; credentials and provider settings stay here.
 # - name: minimax-image-01
 #   display_name: MiniMax Image-01
+#   use: langchain_openai:ChatOpenAI
 #   provider: minimax
 #   capabilities: [image_generation]
 #   default_for: image_generation
@@ -585,9 +586,19 @@ models:
 #   api_key: $MINIMAX_API_KEY
 #   base_url: https://api.minimaxi.com/v1
 
+# - name: qwen-image-3.0-pro
+#   display_name: Qwen Image 3.0 Pro
+#   use: langchain_openai:ChatOpenAI
+#   provider: qwen
+#   capabilities: [image_generation]
+#   model: qwen-image-3.0-pro
+#   api_key: $QWEN_API_KEY
+#   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
 # Example: Embedding model entry. Keep vector dimension stable after indexing data.
 # - name: qwen-text-embedding-v4
 #   display_name: Qwen Text Embedding V4
+#   use: langchain_openai:ChatOpenAI
 #   provider: qwen
 #   capabilities: [embedding]
 #   default_for: embedding
