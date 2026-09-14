@@ -586,12 +586,12 @@ models:
 #   api_key: $MINIMAX_API_KEY
 #   base_url: https://api.minimaxi.com/v1
 
-# - name: qwen-image-3.0-pro
-#   display_name: Qwen Image 3.0 Pro
+# - name: qwen-image-3.0
+#   display_name: Qwen Image 3.0
 #   use: langchain_openai:ChatOpenAI
 #   provider: qwen
 #   capabilities: [image_generation]
-#   model: qwen-image-3.0-pro
+#   model: qwen-image-3.0
 #   api_key: $QWEN_API_KEY
 #   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
 
