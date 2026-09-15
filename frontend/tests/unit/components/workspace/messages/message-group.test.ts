@@ -47,7 +47,7 @@ describe("MessageGroup", () => {
     expect(html).toContain('data-completed-processing="true"');
     expect(html).not.toContain(" open=");
     expect(html).toContain("Creating the presentation");
-    expect(html).not.toContain("private");
+    expect(html).toContain("private Python implementation");
     expect(html).not.toContain("build_ppt");
     expect(html).not.toContain("正在制作");
   });

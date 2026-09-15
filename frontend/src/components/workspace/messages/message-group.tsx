@@ -62,7 +62,7 @@ export function MessageGroup(props: MessageGroupProps) {
     const label = (value as Record<string, unknown>)[locale];
     return typeof label === "string" && label.trim() ? [label] : [];
   });
-  const content =
+  const progressContent =
     progress.length > 0 ? (
       <div
         className="text-muted-foreground space-y-2 px-3 py-2 text-sm"
@@ -74,16 +74,17 @@ export function MessageGroup(props: MessageGroupProps) {
           ),
         )}
       </div>
-    ) : (
-      <MessageGroupContent {...props} />
-    );
-  if (props.isLoading) return content;
+    ) : null;
+  if (props.isLoading) {
+    return progressContent ?? <MessageGroupContent {...props} />;
+  }
   return (
     <details className="rounded-lg border" data-completed-processing="true">
       <summary className="text-muted-foreground cursor-pointer rounded-lg px-3 py-2 text-sm focus-visible:outline-2">
-        {t.common.thinking}
+        {progress.at(-1) ?? t.common.thinking}
       </summary>
-      {content}
+      {progressContent}
+      <MessageGroupContent {...props} />
     </details>
   );
 }
