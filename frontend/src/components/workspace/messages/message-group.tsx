@@ -103,13 +103,15 @@ function MessageGroupContent({
   showTokenDebugSummaries?: boolean;
 }) {
   const { t } = useI18n();
-  const [showAbove, setShowAbove] = useState(
+  const [expandedAbove, setShowAbove] = useState(
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
   );
-  const [showLastThinking, setShowLastThinking] = useState(
+  const [expandedThinking, setShowLastThinking] = useState(
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
   );
   const steps = useMemo(() => convertToSteps(messages), [messages]);
+  const showAbove = isLoading || expandedAbove;
+  const showLastThinking = isLoading || expandedThinking;
   const debugStepByMessageId = useMemo(
     () =>
       new Map(

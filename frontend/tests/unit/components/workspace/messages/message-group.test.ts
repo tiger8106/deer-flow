@@ -52,6 +52,29 @@ describe("MessageGroup", () => {
     expect(html).not.toContain("正在制作");
   });
 
+  it("keeps earlier reasoning expanded when a tool begins streaming", () => {
+    const html = renderGroup(
+      [
+        {
+          type: "ai",
+          id: "reason",
+          content: "",
+          additional_kwargs: { reasoning_content: "Retain this explanation" },
+        },
+        {
+          type: "ai",
+          id: "tool",
+          content: "",
+          tool_calls: [
+            { id: "running", name: "bash", args: { description: "Checking" } },
+          ],
+        },
+      ] as Message[],
+      {},
+      true,
+    );
+    expect(html.replace(/<[^>]*>/g, "")).toContain("Retain this explanation");
+  });
   it("renders assistant text attached to a tool-calling processing message", () => {
     const html = renderGroup([
       {
@@ -197,6 +220,7 @@ describe("MessageGroup", () => {
 function renderGroup(
   messages: Message[],
   toolDisplayLabels: ToolDisplayLabels = {},
+  isLoading = false,
 ) {
   return renderToStaticMarkup(
     createElement(
@@ -211,7 +235,7 @@ function renderGroup(
       // eslint-disable-next-line react/no-children-prop
       createElement(ToolDisplayLabelsProvider, {
         labels: toolDisplayLabels,
-        children: createElement(MessageGroup, { messages }),
+        children: createElement(MessageGroup, { messages, isLoading }),
       }),
     ),
   );

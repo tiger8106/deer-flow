@@ -49,6 +49,7 @@ import {
   getAssistantTurnCopyData,
   getAssistantTurnUsageMessages,
   getMessageGroups,
+  getActiveTurnStartIndex,
   getStreamingMessageLookup,
   hasContent,
   hasReasoning,
@@ -395,7 +396,7 @@ export function MessageList({
   }, [groupedMessages]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
-  const lastGroupIndex = groupedMessages.length - 1;
+  const activeTurnStartIndex = getActiveTurnStartIndex(groupedMessages);
   const turnUsageMessagesByGroupIndex =
     getAssistantTurnUsageMessages(groupedMessages);
   const tokenDebugSteps = useMemo(
@@ -812,7 +813,7 @@ export function MessageList({
           {groupedMessages.map((group, groupIndex) => {
             const turnUsageMessages = turnUsageMessagesByGroupIndex[groupIndex];
             const groupIsLoading =
-              thread.isLoading && groupIndex === lastGroupIndex;
+              thread.isLoading && groupIndex >= activeTurnStartIndex;
             const groupArtifactPaths = getArtifactPathsForGroup(group.messages);
 
             if (group.type === "human" || group.type === "assistant") {
@@ -832,8 +833,7 @@ export function MessageList({
                       <MessageListItem
                         message={msg}
                         isLoading={
-                          thread.isLoading &&
-                          groupIndex === groupedMessages.length - 1
+                          thread.isLoading && groupIndex >= activeTurnStartIndex
                         }
                         threadId={threadId}
                         artifactPaths={artifactPaths}

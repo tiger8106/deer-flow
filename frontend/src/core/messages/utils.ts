@@ -78,7 +78,19 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
           messages: [message],
         });
       } else {
-        const open = lastOpenGroup();
+        // Replayed results belong to the originating call, not the latest turn.
+        const owner = groups.find((group) =>
+          group.messages.some(
+            (candidate) =>
+              candidate.type === "ai" &&
+              candidate.tool_calls?.some(
+                (call) =>
+                  Boolean(message.tool_call_id) &&
+                  call.id === message.tool_call_id,
+              ),
+          ),
+        );
+        const open = owner ?? lastOpenGroup();
         if (open) {
           open.messages.push(message);
         } else {
@@ -154,6 +166,14 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
   }
 
   return groups;
+}
+
+// Processing belongs to the whole user turn, not only its latest message.
+export function getActiveTurnStartIndex(groups: MessageGroup[]): number {
+  for (let index = groups.length - 1; index >= 0; index--) {
+    if (groups[index]?.type === "human") return index + 1;
+  }
+  return 0;
 }
 
 export function groupMessages<T>(
