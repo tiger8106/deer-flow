@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -57,12 +57,24 @@ import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
+  const { thread_id: threadIdFromPath } = useParams<{
+    thread_id: string;
+  }>();
+
+  // The SDK clears and aborts its StreamManager when its threadId prop changes.
+  // Remount only on an actual route-param change so switching chats cannot
+  // cancel the previous run; /new stays mounted while onStart replaces its URL
+  // with native history and binds the newly created thread.
+  return <ChatPageThread key={threadIdFromPath} />;
+}
+
+function ChatPageThread() {
   const { t } = useI18n();
   const router = useRouter();
   const { user } = useAuth();
   const isAdmin = user?.system_role === "admin";
-  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } =
-    useThreadChat();
+  const chat = useThreadChat();
+  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } = chat;
   // `isNewThread` tracks whether the backend has the thread yet — gates the
   // SDK's history fetch (see issue #2746).  `isWelcomeMode` is the visual
   // welcome layout (centered input, hero, quick actions); we flip it to false
@@ -88,6 +100,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   // Keep welcome layout in sync when navigating between threads (sidebar
@@ -121,6 +136,12 @@ export default function ChatPage() {
       setIsWelcomeMode(false);
     },
     onStart: (createdThreadId) => {
+      // A stream can finish creating a /new thread after the user has already
+      // switched away. Its old callback must not navigate the active chat back
+      // to that abandoned thread.
+      if (!mountedRef.current) {
+        return;
+      }
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
       history.replaceState(null, "", `/workspace/chats/${createdThreadId}`);
       setThreadId(createdThreadId);

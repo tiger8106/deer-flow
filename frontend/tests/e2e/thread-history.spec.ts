@@ -1,6 +1,7 @@
 import { expect, test, type Route } from "@playwright/test";
 
 import {
+  handleRunStream,
   mockLangGraphAPI,
   MOCK_THREAD_ID,
   MOCK_THREAD_ID_2,
@@ -363,6 +364,54 @@ test.describe("Thread history", () => {
 
     await expect(page.getByText(OPTIMISTIC_PROMPT_MARKER)).toHaveCount(0);
     await expect(page.getByPlaceholder(/how can i assist you/i)).toBeVisible();
+  });
+
+  test("switching chats does not cancel the previous thread stream", async ({
+    page,
+  }) => {
+    mockLangGraphAPI(page, { threads: THREADS });
+
+    let releaseStream!: () => void;
+    const streamReleased = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    let streamStarted!: () => void;
+    const firstStreamStarted = new Promise<void>((resolve) => {
+      streamStarted = resolve;
+    });
+    let hasStarted = false;
+    let oldStreamFinished = false;
+    const delayedStream = async (route: Route) => {
+      if (!hasStarted) {
+        hasStarted = true;
+        streamStarted();
+      }
+      await streamReleased;
+      await handleRunStream(route);
+      oldStreamFinished = true;
+    };
+    await page.route("**/api/langgraph/runs/stream", delayedStream);
+    await page.route("**/api/langgraph/threads/*/runs/stream", delayedStream);
+
+    await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
+    const textarea = page.getByPlaceholder(/how can i assist you/i);
+    await expect(textarea).toBeVisible({ timeout: 15_000 });
+    await textarea.fill("A request that must keep running");
+    await textarea.press("Enter");
+    await firstStreamStarted;
+
+    await page.getByText("Second conversation").click();
+    await page.waitForURL(`**/workspace/chats/${MOCK_THREAD_ID_2}`);
+    await expect(
+      page.getByText("Response in thread Second conversation"),
+    ).toBeVisible({ timeout: 15_000 });
+
+    releaseStream();
+    await expect.poll(() => oldStreamFinished).toBe(true);
+    await expect(page).toHaveURL(
+      new RegExp(`/workspace/chats/${MOCK_THREAD_ID_2}$`),
+    );
+    await expect(page.getByText("Hello from Tiger!")).toHaveCount(0);
   });
 
   test("new chat resets immediately after a history-only thread URL update", async ({

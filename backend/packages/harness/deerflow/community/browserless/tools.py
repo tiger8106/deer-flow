@@ -315,7 +315,13 @@ async def web_capture_tool(
         return Command(
             update={
                 "artifacts": [virtual_path],
-                "messages": [ToolMessage(message, tool_call_id=tool_call_id)],
+                "messages": [
+                    ToolMessage(
+                        message,
+                        tool_call_id=tool_call_id,
+                        additional_kwargs={"presented_files": [virtual_path]},
+                    )
+                ],
             }
         )
 

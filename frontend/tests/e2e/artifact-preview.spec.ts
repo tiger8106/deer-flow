@@ -328,7 +328,7 @@ test.describe("Artifact preview stability", () => {
     await expect(artifactsPanel.getByText("Presented Report")).toBeVisible();
   });
 
-  test("renders generated thread artifacts after the conversation body", async ({
+  test("renders generated thread artifacts in the delivery turn", async ({
     page,
   }) => {
     mockLangGraphAPI(page, {
@@ -344,8 +344,41 @@ test.describe("Artifact preview stability", () => {
             },
             {
               type: "ai",
+              id: "msg-ai-state-artifact-delivery",
+              content: "",
+              tool_calls: [
+                {
+                  id: "finish-ppt-artifact",
+                  name: "finish_ppt",
+                  args: {},
+                },
+              ],
+            },
+            {
+              type: "tool",
+              id: "msg-tool-state-artifact-delivery",
+              name: "finish_ppt",
+              tool_call_id: "finish-ppt-artifact",
+              content: '{"files":["/mnt/user-data/outputs/deck.pptx"]}',
+              additional_kwargs: {
+                ppt_delivery: true,
+                presented_files: [STATE_ARTIFACT_PATH],
+              },
+            },
+            {
+              type: "ai",
               id: "msg-ai-state-artifact",
               content: "PPT已生成并完成检查。",
+            },
+            {
+              type: "human",
+              id: "msg-human-state-artifact-follow-up",
+              content: [{ type: "text", text: "继续优化PPT" }],
+            },
+            {
+              type: "ai",
+              id: "msg-ai-state-artifact-follow-up",
+              content: "正在处理新的版本。",
             },
           ],
           artifacts: [STATE_ARTIFACT_PATH],
@@ -360,8 +393,8 @@ test.describe("Artifact preview stability", () => {
     await expect(artifacts.getByText("deck.pptx")).toBeVisible();
 
     const bodyText = await page.locator("body").innerText();
-    expect(bodyText.indexOf("PPT已生成并完成检查。")).toBeLessThan(
-      bodyText.indexOf("deck.pptx"),
+    expect(bodyText.indexOf("deck.pptx")).toBeLessThan(
+      bodyText.indexOf("继续优化PPT"),
     );
   });
 });

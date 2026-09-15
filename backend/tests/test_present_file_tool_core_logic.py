@@ -28,6 +28,9 @@ def test_present_files_normalizes_host_outputs_path(tmp_path):
 
     assert result.update["artifacts"] == ["/mnt/user-data/outputs/report.md"]
     assert result.update["messages"][0].content == "Successfully presented files"
+    assert result.update["messages"][0].additional_kwargs["presented_files"] == [
+        "/mnt/user-data/outputs/report.md"
+    ]
 
 
 def test_present_files_keeps_virtual_outputs_path(tmp_path, monkeypatch):

@@ -2,7 +2,7 @@
 
 import { BotIcon, PlusSquare } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
@@ -54,19 +54,33 @@ import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 export default function AgentChatPage() {
+  const { agent_name, thread_id: threadIdFromPath } = useParams<{
+    agent_name: string;
+    thread_id: string;
+  }>();
+  // Keep each route's SDK StreamManager independent. A threadId prop change
+  // otherwise aborts the previous stream; the /new route remains stable during
+  // native history replacement when its first run receives a real thread ID.
+  return (
+    <AgentChatPageThread
+      key={`${agent_name}:${threadIdFromPath}`}
+      agentName={agent_name}
+    />
+  );
+}
+
+function AgentChatPageThread({ agentName }: { agentName: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const { user } = useAuth();
   const isAdmin = user?.system_role === "admin";
 
-  const { agent_name } = useParams<{
-    agent_name: string;
-  }>();
+  const agent_name = agentName;
+  const chat = useThreadChat();
 
   const { agent } = useAgent(agent_name);
 
-  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } =
-    useThreadChat();
+  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } = chat;
   // `isNewThread` gates history/token-usage fetches until the backend creates
   // the thread. `isWelcomeMode` controls only the centered welcome layout, so
   // it can flip immediately on submit without triggering eager history loads.
@@ -84,6 +98,14 @@ export default function AgentChatPage() {
     isMock,
   });
   const backendTokenUsage = threadTokenUsageToTokenUsage(threadTokenUsage.data);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const { showNotification } = useNotification();
 
@@ -109,6 +131,12 @@ export default function AgentChatPage() {
       setIsWelcomeMode(false);
     },
     onStart: (createdThreadId) => {
+      // A stream can finish creating a /new thread after the user has already
+      // switched away. Its old callback must not navigate the active chat back
+      // to that abandoned thread.
+      if (!mountedRef.current) {
+        return;
+      }
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
       history.replaceState(
         null,

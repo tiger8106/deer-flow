@@ -527,6 +527,51 @@ export function extractPresentFilesFromMessage(message: Message) {
   return files;
 }
 
+/**
+ * Return files published by this message/turn, without reading cumulative
+ * thread state.  The metadata path covers tools such as finish_ppt and
+ * web_capture that publish artifacts directly; the present_files call path
+ * keeps older and in-flight messages compatible.
+ */
+export function extractPresentedFilesFromMessage(message: Message) {
+  const files = extractPresentFilesFromMessage(message).filter(
+    (path): path is string => typeof path === "string" && path.length > 0,
+  );
+  const metadataFiles = message.additional_kwargs?.presented_files;
+  if (Array.isArray(metadataFiles)) {
+    files.push(
+      ...metadataFiles.filter(
+        (path): path is string => typeof path === "string" && path.length > 0,
+      ),
+    );
+  }
+  // Keep delivery cards visible for messages persisted before the explicit
+  // presented_files marker was added. Only parse the known finish_ppt payload;
+  // arbitrary tool output must never become a file card.
+  if (
+    message.additional_kwargs?.ppt_delivery &&
+    typeof message.content === "string"
+  ) {
+    try {
+      const payload: unknown = JSON.parse(message.content);
+      if (typeof payload === "object" && payload !== null) {
+        const deliveryFiles = Reflect.get(payload, "files");
+        if (Array.isArray(deliveryFiles)) {
+          files.push(
+            ...deliveryFiles.filter(
+              (path): path is string =>
+                typeof path === "string" && path.length > 0,
+            ),
+          );
+        }
+      }
+    } catch {
+      // Older failed/partial delivery messages are not file publications.
+    }
+  }
+  return [...new Set(files)];
+}
+
 export function hasSubagent(message: AIMessage) {
   for (const toolCall of message.tool_calls ?? []) {
     if (toolCall.name === "task") {

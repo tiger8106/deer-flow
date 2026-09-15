@@ -124,6 +124,10 @@ src/
 └── styles/                 # Global styles
 ```
 
+Conversation artifact cards are message-group scoped through
+`additional_kwargs.presented_files`; the cumulative thread artifact list remains
+available to the header panel and preview selector.
+
 ## Scripts
 
 | Command             | Description                             |

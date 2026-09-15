@@ -113,6 +113,11 @@ LLM-powered persistent context retention across conversations:
 | **MCP** | Any Model Context Protocol server (stdio, SSE, HTTP transports) |
 | **Skills** | Domain-specific workflows injected via system prompt |
 
+Published files remain cumulative in thread state for the artifact panel. A tool
+that should show a file beside its own response also returns
+`ToolMessage.additional_kwargs.presented_files`, which is scoped to that message
+group by the frontend.
+
 ### Gateway API
 
 FastAPI application providing REST endpoints for frontend integration:

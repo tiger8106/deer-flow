@@ -44,14 +44,13 @@ import {
 } from "@/core/messages/usage-model";
 import {
   extractContentFromMessage,
-  extractPresentFilesFromMessage,
+  extractPresentedFilesFromMessage,
   extractTextFromMessage,
   getAssistantTurnCopyData,
   getAssistantTurnUsageMessages,
   getMessageGroups,
   getStreamingMessageLookup,
   hasContent,
-  hasPresentFiles,
   hasReasoning,
   isAssistantMessageGroupStreaming,
   isHiddenFromUIMessage,
@@ -113,19 +112,27 @@ export function getArtifactPathsForDisplay(
 ): string[] {
   const paths = new Set(artifactPaths);
 
-  // A present_files tool call can reach the client before its Command update
-  // has been folded into thread.values.artifacts. Keep the file card visible
-  // during that short window, while the state remains the source of truth for
-  // artifacts from tools that publish files without a present_files call.
+  // Keep cumulative state here for resolving inline artifact links in old and
+  // current messages. Conversation file cards use getArtifactPathsForGroup so
+  // a previous turn cannot be painted below a newer turn.
   for (const message of messages) {
-    if (!hasPresentFiles(message)) {
-      continue;
-    }
-    for (const path of extractPresentFilesFromMessage(message)) {
+    for (const path of extractPresentedFilesFromMessage(message)) {
       paths.add(path);
     }
   }
 
+  return [...paths];
+}
+
+export function getArtifactPathsForGroup(
+  messages: readonly Message[],
+): string[] {
+  const paths = new Set<string>();
+  for (const message of messages) {
+    for (const path of extractPresentedFilesFromMessage(message)) {
+      paths.add(path);
+    }
+  }
   return [...paths];
 }
 
@@ -806,6 +813,7 @@ export function MessageList({
             const turnUsageMessages = turnUsageMessagesByGroupIndex[groupIndex];
             const groupIsLoading =
               thread.isLoading && groupIndex === lastGroupIndex;
+            const groupArtifactPaths = getArtifactPathsForGroup(group.messages);
 
             if (group.type === "human" || group.type === "assistant") {
               return (
@@ -955,6 +963,14 @@ export function MessageList({
                       className="mb-4"
                     />
                   )}
+                  {groupArtifactPaths.length > 0 && (
+                    <div className="mb-4" data-testid="conversation-artifacts">
+                      <ArtifactFileList
+                        files={groupArtifactPaths}
+                        threadId={threadId}
+                      />
+                    </div>
+                  )}
                   {renderTokenUsage({
                     messages: group.messages,
                     turnUsageMessages,
@@ -1077,6 +1093,14 @@ export function MessageList({
                     tokenUsageInlineMode === "step_debug"
                   }
                 />
+                {groupArtifactPaths.length > 0 && (
+                  <div className="mb-4" data-testid="conversation-artifacts">
+                    <ArtifactFileList
+                      files={groupArtifactPaths}
+                      threadId={threadId}
+                    />
+                  </div>
+                )}
                 {renderTokenUsage({
                   messages: group.messages,
                   turnUsageMessages,
@@ -1090,11 +1114,6 @@ export function MessageList({
               <Reasoning isStreaming={true} startTimeProp={turnStartTime}>
                 <ReasoningTrigger hasContent={false} />
               </Reasoning>
-            </div>
-          )}
-          {artifactPaths.length > 0 && (
-            <div className="w-full" data-testid="conversation-artifacts">
-              <ArtifactFileList files={artifactPaths} threadId={threadId} />
             </div>
           )}
           <div style={{ height: `${paddingBottom}px` }} />

@@ -116,6 +116,15 @@ def present_file_tool(
     return Command(
         update={
             "artifacts": normalized_paths,
-            "messages": [ToolMessage("Successfully presented files", tool_call_id=tool_call_id)],
+            "messages": [
+                ToolMessage(
+                    "Successfully presented files",
+                    tool_call_id=tool_call_id,
+                    # The frontend uses this turn-local marker for the inline
+                    # file card; ThreadState.artifacts remains cumulative for
+                    # the header/download panel and API compatibility.
+                    additional_kwargs={"presented_files": normalized_paths},
+                )
+            ],
         },
     )

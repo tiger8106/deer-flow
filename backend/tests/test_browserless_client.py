@@ -369,6 +369,9 @@ class TestBrowserlessTools:
         written = outputs_dir / "Dashboard_Capture.png"
         assert written.read_bytes() == b"\x89PNG\r\n\x1a\nimage"
         assert result.update["messages"][0].content == "Captured screenshot: /mnt/user-data/outputs/Dashboard_Capture.png"
+        assert result.update["messages"][0].additional_kwargs["presented_files"] == [
+            "/mnt/user-data/outputs/Dashboard_Capture.png"
+        ]
         mock_cfg.assert_any_call("web_capture")
         mock_client.capture_screenshot.assert_called_once_with(
             url="https://example.com/dashboard",
