@@ -23,6 +23,35 @@ rs.mock("@/components/workspace/artifacts", () => ({
 }));
 
 describe("MessageGroup", () => {
+  it("collapses completed processing and only exposes localized public progress", () => {
+    const html = renderGroup([
+      {
+        id: "ppt-progress",
+        type: "ai",
+        content: "private Python implementation",
+        additional_kwargs: {
+          user_facing_progress: {
+            "en-US": "Creating the presentation",
+            "zh-CN": "正在制作 PPT",
+          },
+        },
+        tool_calls: [
+          {
+            id: "ppt-call",
+            name: "build_ppt",
+            args: { secret: "private path" },
+          },
+        ],
+      } as Message,
+    ]);
+    expect(html).toContain('data-completed-processing="true"');
+    expect(html).not.toContain(" open=");
+    expect(html).toContain("Creating the presentation");
+    expect(html).not.toContain("private");
+    expect(html).not.toContain("build_ppt");
+    expect(html).not.toContain("正在制作");
+  });
+
   it("renders assistant text attached to a tool-calling processing message", () => {
     const html = renderGroup([
       {

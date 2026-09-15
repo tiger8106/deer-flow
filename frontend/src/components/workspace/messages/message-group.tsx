@@ -46,7 +46,49 @@ import { Tooltip } from "../tooltip";
 
 import { MarkdownContent } from "./markdown-content";
 
-export function MessageGroup({
+type MessageGroupProps = {
+  className?: string;
+  messages: Message[];
+  isLoading?: boolean;
+  tokenDebugSteps?: TokenDebugStep[];
+  showTokenDebugSummaries?: boolean;
+};
+
+export function MessageGroup(props: MessageGroupProps) {
+  const { t, locale } = useI18n();
+  const progress = props.messages.flatMap((message) => {
+    const value = message.additional_kwargs?.user_facing_progress;
+    if (!value || typeof value !== "object") return [];
+    const label = (value as Record<string, unknown>)[locale];
+    return typeof label === "string" && label.trim() ? [label] : [];
+  });
+  const content =
+    progress.length > 0 ? (
+      <div
+        className="text-muted-foreground space-y-2 px-3 py-2 text-sm"
+        data-user-facing-progress="true"
+      >
+        {(props.isLoading ? progress.slice(-1) : [...new Set(progress)]).map(
+          (label) => (
+            <p key={label}>{label}</p>
+          ),
+        )}
+      </div>
+    ) : (
+      <MessageGroupContent {...props} />
+    );
+  if (props.isLoading) return content;
+  return (
+    <details className="rounded-lg border" data-completed-processing="true">
+      <summary className="text-muted-foreground cursor-pointer rounded-lg px-3 py-2 text-sm focus-visible:outline-2">
+        {t.common.thinking}
+      </summary>
+      {content}
+    </details>
+  );
+}
+
+function MessageGroupContent({
   className,
   messages,
   isLoading = false,

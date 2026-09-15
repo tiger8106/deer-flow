@@ -1067,7 +1067,7 @@ export function MessageList({
               <div key={"group-" + group.id} className="w-full">
                 <MessageGroup
                   messages={group.messages}
-                  isLoading={thread.isLoading}
+                  isLoading={groupIsLoading}
                   tokenDebugSteps={tokenDebugSteps.filter((step) =>
                     group.messages.some(
                       (message) => message.id === step.messageId,

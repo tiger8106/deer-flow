@@ -1,3 +1,4 @@
+import { FileDownIcon } from "lucide-react";
 import type { AnchorHTMLAttributes } from "react";
 
 import { resolveArtifactURL } from "@/core/artifacts/utils";
@@ -31,13 +32,22 @@ export function createMarkdownLinkComponent(threadId?: string) {
       }
     }
     if (threadId && href?.startsWith("/mnt/")) {
+      const { children, className, ...rest } = props;
       return (
         <a
-          {...props}
+          {...rest}
           href={resolveArtifactURL(href, threadId)}
+          className={cn(
+            "not-prose border-primary/25 bg-primary/10 text-primary hover:bg-primary/20 focus-visible:outline-primary my-1 inline-flex max-w-full items-center gap-2 rounded-lg border px-3 py-2 font-medium no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2",
+            className,
+          )}
           target="_blank"
           rel="noopener noreferrer"
-        />
+          data-artifact-download="true"
+        >
+          <FileDownIcon aria-hidden="true" className="size-4 shrink-0" />
+          <span className="break-words">{children}</span>
+        </a>
       );
     }
     const { className, target, rel, ...rest } = props;
