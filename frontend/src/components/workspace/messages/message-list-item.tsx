@@ -43,6 +43,7 @@ import {
 } from "@/core/artifacts/utils";
 import { extractCitationSources } from "@/core/citations/sources";
 import { useI18n } from "@/core/i18n/hooks";
+import { visibleProcessingText } from "@/core/messages/processing-display";
 import {
   extractContentFromMessage,
   extractReasoningContentFromMessage,
@@ -348,7 +349,14 @@ function MessageContent_({
   );
 
   const rawContent = extractContentFromMessage(message);
-  const reasoningContent = extractReasoningContentFromMessage(message);
+  const reasoningContent = visibleProcessingText(
+    extractReasoningContentFromMessage(message) ?? "",
+    !!isLoading && !rawContent,
+  );
+  const [reasoningExpanded, setReasoningExpanded] = useState(false);
+  useEffect(() => {
+    setReasoningExpanded(false);
+  }, [isLoading]);
 
   const files = useMemo(() => {
     const files = message.additional_kwargs?.files;
@@ -409,6 +417,9 @@ function MessageContent_({
     return (
       <AIElementMessageContent className={className}>
         <Reasoning
+          open={!!isLoading || reasoningExpanded}
+          onOpenChange={setReasoningExpanded}
+          defaultOpen={false}
           isStreaming={isLoading}
           startTimeProp={turnStartTime}
           duration={turnDuration}
@@ -456,6 +467,9 @@ function MessageContent_({
       {!isHuman &&
         (!!reasoningContent || wasLoading || turnDuration !== undefined) && (
           <Reasoning
+            open={!!isLoading || reasoningExpanded}
+            onOpenChange={setReasoningExpanded}
+            defaultOpen={false}
             isStreaming={isLoading}
             startTimeProp={turnStartTime}
             duration={turnDuration}

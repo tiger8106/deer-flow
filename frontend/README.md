@@ -156,3 +156,5 @@ available to the header panel and preview selector.
 MIT License. See [LICENSE](../LICENSE) for details.
 
 Conversation history preserves the persisted position of reasoning and tool steps when checkpoint compaction retains only the surrounding human messages and answers. Live content updates replace shared messages in place.
+
+Tiger processing uses the existing thought fold for the entire timeline. It opens during the run and closes on completion; users can reopen it. Internal commands and skill-document activity are omitted from this display while original messages remain available to the agent.

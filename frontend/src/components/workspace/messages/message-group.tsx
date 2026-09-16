@@ -1,11 +1,9 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import {
   BookOpenTextIcon,
-  ChevronUp,
   CoinsIcon,
   FolderOpenIcon,
   GlobeIcon,
-  LightbulbIcon,
   ListTodoIcon,
   MessageCircleQuestionMarkIcon,
   MessageSquareTextIcon,
@@ -14,18 +12,21 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ChainOfThought,
   ChainOfThoughtContent,
+  ChainOfThoughtHeader,
   ChainOfThoughtSearchResult,
   ChainOfThoughtSearchResults,
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
-import { CodeBlock } from "@/components/ai-elements/code-block";
-import { Button } from "@/components/ui/button";
 import { useI18n } from "@/core/i18n/hooks";
+import {
+  visibleProcessingText,
+  isInternalToolCall,
+} from "@/core/messages/processing-display";
 import { formatTokenCount } from "@/core/messages/usage";
 import type { TokenDebugStep } from "@/core/messages/usage-model";
 import {
@@ -37,59 +38,14 @@ import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { useToolDisplayLabels } from "@/core/tools/context";
 import { resolveToolDisplayLabel } from "@/core/tools/display-labels";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
-import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts";
-import { FlipDisplay } from "../flip-display";
 import { Tooltip } from "../tooltip";
 
 import { MarkdownContent } from "./markdown-content";
 
-type MessageGroupProps = {
-  className?: string;
-  messages: Message[];
-  isLoading?: boolean;
-  tokenDebugSteps?: TokenDebugStep[];
-  showTokenDebugSummaries?: boolean;
-};
-
-export function MessageGroup(props: MessageGroupProps) {
-  const { t, locale } = useI18n();
-  const progress = props.messages.flatMap((message) => {
-    const value = message.additional_kwargs?.user_facing_progress;
-    if (!value || typeof value !== "object") return [];
-    const label = (value as Record<string, unknown>)[locale];
-    return typeof label === "string" && label.trim() ? [label] : [];
-  });
-  const progressContent =
-    progress.length > 0 ? (
-      <div
-        className="text-muted-foreground space-y-2 px-3 py-2 text-sm"
-        data-user-facing-progress="true"
-      >
-        {(props.isLoading ? progress.slice(-1) : [...new Set(progress)]).map(
-          (label) => (
-            <p key={label}>{label}</p>
-          ),
-        )}
-      </div>
-    ) : null;
-  if (props.isLoading) {
-    return progressContent ?? <MessageGroupContent {...props} />;
-  }
-  return (
-    <details className="rounded-lg border" data-completed-processing="true">
-      <summary className="text-muted-foreground cursor-pointer rounded-lg px-3 py-2 text-sm focus-visible:outline-2">
-        {progress.at(-1) ?? t.common.thinking}
-      </summary>
-      {progressContent}
-      <MessageGroupContent {...props} />
-    </details>
-  );
-}
-
-function MessageGroupContent({
+export function MessageGroup({
   className,
   messages,
   isLoading = false,
@@ -103,15 +59,14 @@ function MessageGroupContent({
   showTokenDebugSummaries?: boolean;
 }) {
   const { t } = useI18n();
-  const [expandedAbove, setShowAbove] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    setExpanded(false);
+  }, [isLoading]);
+  const steps = useMemo(
+    () => convertToSteps(messages, isLoading),
+    [messages, isLoading],
   );
-  const [expandedThinking, setShowLastThinking] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
-  );
-  const steps = useMemo(() => convertToSteps(messages), [messages]);
-  const showAbove = isLoading || expandedAbove;
-  const showLastThinking = isLoading || expandedThinking;
   const debugStepByMessageId = useMemo(
     () =>
       new Map(
@@ -134,31 +89,6 @@ function MessageGroupContent({
 
     return counts;
   }, [steps]);
-  const lastToolCallStep = useMemo(() => {
-    const filteredSteps = steps.filter((step) => step.type === "toolCall");
-    return filteredSteps[filteredSteps.length - 1];
-  }, [steps]);
-  const aboveLastToolCallSteps = useMemo(() => {
-    if (lastToolCallStep) {
-      const index = steps.indexOf(lastToolCallStep);
-      return steps.slice(0, index);
-    }
-    return [];
-  }, [lastToolCallStep, steps]);
-  const collapsibleAboveLastToolCallSteps = useMemo(
-    () =>
-      aboveLastToolCallSteps.filter((step) => step.type !== "assistantText"),
-    [aboveLastToolCallSteps],
-  );
-  const lastReasoningStep = useMemo(() => {
-    if (lastToolCallStep) {
-      const index = steps.indexOf(lastToolCallStep);
-      return steps.slice(index + 1).find((step) => step.type === "reasoning");
-    } else {
-      const filteredSteps = steps.filter((step) => step.type === "reasoning");
-      return filteredSteps[filteredSteps.length - 1];
-    }
-  }, [lastToolCallStep, steps]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
   const firstEligibleDebugSummaryStepIndexByMessageId = useMemo(() => {
     const firstIndices = new Map<string, number>();
@@ -318,122 +248,18 @@ function MessageGroupContent({
     ];
   };
 
-  const lastReasoningDebugStep =
-    showTokenDebugSummaries && lastReasoningStep?.messageId
-      ? debugStepByMessageId.get(lastReasoningStep.messageId)
-      : undefined;
-
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
-      open={true}
+      open={isLoading || expanded}
+      onOpenChange={setExpanded}
     >
-      {collapsibleAboveLastToolCallSteps.length > 0 && (
-        <Button
-          key="above"
-          className="w-full items-start justify-start text-left"
-          variant="ghost"
-          onClick={() => setShowAbove(!showAbove)}
-        >
-          <ChainOfThoughtStep
-            label={
-              <span className="opacity-60">
-                {showAbove
-                  ? t.toolCalls.lessSteps
-                  : t.toolCalls.moreSteps(
-                      collapsibleAboveLastToolCallSteps.length,
-                    )}
-              </span>
-            }
-            icon={
-              <ChevronUp
-                className={cn(
-                  "size-4 opacity-60 transition-transform duration-200",
-                  showAbove ? "rotate-180" : "",
-                )}
-              />
-            }
-          ></ChainOfThoughtStep>
-        </Button>
-      )}
-      {lastToolCallStep && (
-        <ChainOfThoughtContent className="px-4 pb-2">
-          {(showAbove
-            ? aboveLastToolCallSteps
-            : aboveLastToolCallSteps.filter(
-                (step) => step.type === "assistantText",
-              )
-          ).flatMap(renderStep)}
-          {renderDebugSummary(
-            lastToolCallStep.messageId,
-            steps.indexOf(lastToolCallStep),
-          )}
-          {lastToolCallStep && (
-            <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
-              {renderToolCall(lastToolCallStep, { isLast: true })}
-            </FlipDisplay>
-          )}
-        </ChainOfThoughtContent>
-      )}
-      {lastReasoningStep && (
-        <>
-          {renderDebugSummary(
-            lastReasoningStep.messageId,
-            steps.indexOf(lastReasoningStep),
-          )}
-          <Button
-            key={lastReasoningStep.id}
-            className="w-full items-start justify-start text-left"
-            variant="ghost"
-            onClick={() => setShowLastThinking(!showLastThinking)}
-          >
-            <div className="flex w-full items-center justify-between">
-              <ChainOfThoughtStep
-                className="font-normal"
-                label={
-                  <DebugStepLabel
-                    label={t.common.thinking}
-                    token={shouldInlineThinkingToken({
-                      debugStep: lastReasoningDebugStep,
-                      toolCallCount: lastReasoningStep.messageId
-                        ? (toolCallCountByMessageId.get(
-                            lastReasoningStep.messageId,
-                          ) ?? 0)
-                        : 0,
-                      enabled: showTokenDebugSummaries,
-                      thinkingLabel: t.common.thinking,
-                      t,
-                    })}
-                  />
-                }
-                icon={LightbulbIcon}
-              ></ChainOfThoughtStep>
-              <div>
-                <ChevronUp
-                  className={cn(
-                    "text-muted-foreground size-4",
-                    showLastThinking ? "" : "rotate-180",
-                  )}
-                />
-              </div>
-            </div>
-          </Button>
-          {showLastThinking && (
-            <ChainOfThoughtContent className="px-4 pb-2">
-              <ChainOfThoughtStep
-                key={lastReasoningStep.id}
-                label={
-                  <MarkdownContent
-                    content={lastReasoningStep.reasoning ?? ""}
-                    isLoading={isLoading}
-                    rehypePlugins={rehypePlugins}
-                  />
-                }
-              ></ChainOfThoughtStep>
-            </ChainOfThoughtContent>
-          )}
-        </>
-      )}
+      <ChainOfThoughtHeader className="px-3 py-2">
+        {t.common.thinking}
+      </ChainOfThoughtHeader>
+      <ChainOfThoughtContent className="px-4 pb-2">
+        {steps.flatMap(renderStep)}
+      </ChainOfThoughtContent>
     </ChainOfThought>
   );
 }
@@ -445,32 +271,6 @@ function formatDebugToken(
   return debugStep.usage
     ? `${formatTokenCount(debugStep.usage.totalTokens)} ${t.tokenUsage.label}`
     : t.tokenUsage.unavailableShort;
-}
-
-function shouldInlineThinkingToken({
-  debugStep,
-  toolCallCount,
-  enabled,
-  thinkingLabel,
-  t,
-}: {
-  debugStep?: TokenDebugStep;
-  toolCallCount: number;
-  enabled: boolean;
-  thinkingLabel: string;
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  if (
-    !enabled ||
-    !debugStep ||
-    debugStep.sharedAttribution ||
-    toolCallCount > 0 ||
-    debugStep.label !== thinkingLabel
-  ) {
-    return null;
-  }
-
-  return formatDebugToken(debugStep, t);
 }
 
 function DebugStepLabel({
@@ -720,22 +520,13 @@ function ToolCall({
         />
       );
     }
-    const command: string | undefined = (args as { command: string })?.command;
+
     return (
       <ChainOfThoughtStep
         key={id}
         label={resolveLabel(description)}
         icon={SquareTerminalIcon}
-      >
-        {command && (
-          <CodeBlock
-            className="mx-0 cursor-pointer border-none px-0"
-            showLineNumbers={false}
-            language="bash"
-            code={command}
-          />
-        )}
-      </ChainOfThoughtStep>
+      ></ChainOfThoughtStep>
     );
   } else if (name === "ask_clarification") {
     return (
@@ -796,11 +587,18 @@ interface CoTAssistantTextStep extends GenericCoTStep<"assistantText"> {
 
 type CoTStep = CoTAssistantTextStep | CoTReasoningStep | CoTToolCallStep;
 
-function convertToSteps(messages: Message[]): CoTStep[] {
+function convertToSteps(messages: Message[], isLoading: boolean): CoTStep[] {
   const steps: CoTStep[] = [];
   for (const [messageIndex, message] of messages.entries()) {
     if (message.type === "ai") {
-      const content = extractContentFromMessage(message);
+      const streaming =
+        isLoading &&
+        messageIndex === messages.length - 1 &&
+        !message.tool_calls?.length;
+      const internal = (message.tool_calls ?? []).some(isInternalToolCall);
+      const content = internal
+        ? ""
+        : visibleProcessingText(extractContentFromMessage(message), streaming);
       if (content && message.tool_calls?.length) {
         steps.push({
           id: `${message.id ?? `ai-${messageIndex}`}-content`,
@@ -809,7 +607,12 @@ function convertToSteps(messages: Message[]): CoTStep[] {
           content,
         });
       }
-      const reasoning = extractReasoningContentFromMessage(message);
+      const reasoning = internal
+        ? ""
+        : visibleProcessingText(
+            extractReasoningContentFromMessage(message) ?? "",
+            streaming,
+          );
       if (reasoning) {
         const step: CoTReasoningStep = {
           id: message.id,
@@ -820,7 +623,7 @@ function convertToSteps(messages: Message[]): CoTStep[] {
         steps.push(step);
       }
       for (const tool_call of message.tool_calls ?? []) {
-        if (tool_call.name === "task") {
+        if (tool_call.name === "task" || isInternalToolCall(tool_call)) {
           continue;
         }
         const step: CoTToolCallStep = {
