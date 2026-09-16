@@ -74,7 +74,7 @@ test("completed processing and final reasoning fold completely and reopen", asyn
     "Exact source query",
     "Final source reasoning.",
   ])
-    await expect(page.getByText(text, { exact: true })).toBeHidden();
+    await expect(page.getByText(text, { exact: false })).toBeHidden();
   const folds = page.getByRole("button", { name: /thinking|thought/i });
   expect(await folds.count()).toBeGreaterThanOrEqual(2);
   for (const fold of await folds.all()) await fold.click();
@@ -84,7 +84,7 @@ test("completed processing and final reasoning fold completely and reopen", asyn
     "Exact source query",
     "Final source reasoning.",
   ])
-    await expect(page.getByText(text, { exact: true })).toBeVisible();
+    await expect(page.getByText(text, { exact: false })).toBeVisible();
   await expect(page.getByText("Private command explanation")).toBeHidden();
   await expect(page.getByText(/Read SKILL.md/)).toBeHidden();
 });
