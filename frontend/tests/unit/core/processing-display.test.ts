@@ -6,6 +6,13 @@ import {
 } from "@/core/messages/processing-display";
 
 describe("processing display", () => {
+  it("removes the body of multiline code blocks, including blank lines", () => {
+    expect(
+      visibleProcessingText(
+        "Check evidence.\n\n```python\nx = 1\n\nsecret()\n```\n\nUse the original units.",
+      ),
+    ).toBe("Check evidence.\n\nUse the original units.");
+  });
   it("buffers incomplete technical paragraphs across streaming chunks", () => {
     expect(
       visibleProcessingText("Check the original.\n\nNext read", true),
