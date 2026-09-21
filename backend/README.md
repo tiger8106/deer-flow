@@ -518,3 +518,5 @@ See the [LICENSE](../LICENSE) file in the project root.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+
+Loop detection compares completed operations and their results. Repeated unchanged cycles first receive a recovery hint, then pause; changing inputs/results and normal high-frequency tool use continue. Legacy per-tool frequency thresholds are accepted for configuration compatibility but no longer stop runs.

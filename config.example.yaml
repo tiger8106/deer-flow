@@ -976,16 +976,8 @@ loop_detection:
   hard_limit: 5
   window_size: 20
   max_tracked_threads: 100
-  tool_freq_warn: 30
-  tool_freq_hard_limit: 50
-  # Per-tool overrides for tool_freq_warn / tool_freq_hard_limit. Values can be
-  # higher or lower than the global defaults. Commonly used to raise thresholds
-  # for high-frequency tools like bash in batch workflows (e.g. RNA-seq pipelines)
-  # without weakening protection on every other tool.
-  # tool_freq_overrides:
-  #   bash:
-  #     warn: 150
-  #     hard_limit: 300
+  # Raw per-tool counts no longer trigger a stop. The former tool_freq_* fields
+  # remain parseable for compatibility; only unchanged completed cycles count.
 
 # ============================================================================
 # Tool Progress State Machine Configuration (RFC #3177)

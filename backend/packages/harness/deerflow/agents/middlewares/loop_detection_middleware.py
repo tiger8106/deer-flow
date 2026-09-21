@@ -4,10 +4,10 @@ P0 safety: prevents the agent from calling the same tool with the same
 arguments indefinitely until the recursion limit kills the run.
 
 Detection strategy:
-  1. After each model response, hash the tool calls (name + args).
+  1. After each model response, fingerprint completed cycles of inputs and results.
   2. Track recent hashes in a sliding window.
   3. If the same hash appears >= warn_threshold times, queue a
-     "you are repeating yourself — wrap up" warning for the current
+     "change the approach" warning for the current
      thread/run. The warning is **injected at the next model call** (in
      ``wrap_model_call``) as a ``HumanMessage`` appended to the message
      list, *after* all ToolMessage responses to the previous
@@ -74,12 +74,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Defaults — can be overridden via constructor
-_DEFAULT_WARN_THRESHOLD = 3  # inject warning after 3 identical calls
-_DEFAULT_HARD_LIMIT = 5  # force-stop after 5 identical calls
+_DEFAULT_WARN_THRESHOLD = 3  # inject warning after 3 unchanged completed cycles
+_DEFAULT_HARD_LIMIT = 5  # force-stop after 5 unchanged completed cycles
 _DEFAULT_WINDOW_SIZE = 20  # track last N tool calls
 _DEFAULT_MAX_TRACKED_THREADS = 100  # LRU eviction limit
-_DEFAULT_TOOL_FREQ_WARN = 30  # warn after 30 calls to the same tool type
-_DEFAULT_TOOL_FREQ_HARD_LIMIT = 50  # force-stop after 50 calls to the same tool type
+_DEFAULT_TOOL_FREQ_WARN = 30  # compatibility only; never enforced
+_DEFAULT_TOOL_FREQ_HARD_LIMIT = 50  # compatibility only; never enforced
 _MAX_PENDING_WARNINGS_PER_RUN = 4
 
 
@@ -111,44 +111,15 @@ def _normalize_tool_call_args(raw_args: object) -> tuple[dict, str | None]:
 
 def _stable_tool_key(name: str, args: dict, fallback_key: str | None) -> str:
     """Derive a stable key from salient args without overfitting to noise."""
-    if name == "read_file" and fallback_key is None:
-        path = args.get("path") or ""
-        start_line = args.get("start_line")
-        end_line = args.get("end_line")
-
-        bucket_size = 200
-        try:
-            start_line = int(start_line) if start_line is not None else 1
-        except (TypeError, ValueError):
-            start_line = 1
-        try:
-            end_line = int(end_line) if end_line is not None else start_line
-        except (TypeError, ValueError):
-            end_line = start_line
-
-        start_line, end_line = sorted((start_line, end_line))
-        bucket_start = max(start_line, 1)
-        bucket_end = max(end_line, 1)
-        bucket_start = (bucket_start - 1) // bucket_size
-        bucket_end = (bucket_end - 1) // bucket_size
-        return f"{path}:{bucket_start}-{bucket_end}"
-
-    # write_file / str_replace are content-sensitive: same path may be updated
-    # with different payloads during iteration. Using only salient fields (path)
-    # can collapse distinct calls, so we hash full args to reduce false positives.
-    if name in {"write_file", "str_replace"}:
-        if fallback_key is not None:
-            return fallback_key
-        return json.dumps(args, sort_keys=True, default=str)
-
-    salient_fields = ("path", "url", "query", "command", "pattern", "glob", "cmd")
-    stable_args = {field: args[field] for field in salient_fields if args.get(field) is not None}
-    if stable_args:
-        return json.dumps(stable_args, sort_keys=True, default=str)
-
     if fallback_key is not None:
         return fallback_key
-
+    args = {key: value for key, value in args.items() if key != "description"}
+    if name == "read_file":
+        try:
+            start, end = sorted((int(args.get("start_line", 1)), int(args.get("end_line", args.get("start_line", 1)))))
+            args.update(start_line=start, end_line=end)
+        except (TypeError, ValueError):
+            pass
     return json.dumps(args, sort_keys=True, default=str)
 
 
@@ -173,15 +144,42 @@ def _hash_tool_calls(tool_calls: list[dict]) -> str:
     return hashlib.md5(blob.encode()).hexdigest()[:12]
 
 
-_WARNING_MSG = "[LOOP DETECTED] You are repeating the same tool calls. Stop calling tools and produce your final answer now. If you cannot complete the task, summarize what you accomplished so far."
+_WARNING_MSG = "[LOOP DETECTED] The same operations returned unchanged results repeatedly. Change the approach or input before retrying; continue useful work. If no practical recovery exists, explain the blocker."
+_HARD_STOP_MSG = "Repeated operations produced no new results. This run has been paused; existing work is retained. Resume after changing the approach or resolving the blocker."
 
-_TOOL_FREQ_WARNING_MSG = (
-    "[LOOP DETECTED] You have called {tool_name} {count} times without producing a final answer. Stop calling tools and produce your final answer now. If you cannot complete the task, summarize what you accomplished so far."
-)
 
-_HARD_STOP_MSG = "[FORCED STOP] Repeated tool calls exceeded the safety limit. Producing final answer with results collected so far."
+def _completed_cycle_key(messages, calls):
+    """Compare evidence across completed cycles, not tool names or call counts.
 
-_TOOL_FREQ_HARD_STOP_MSG = "[FORCED STOP] Tool {tool_name} called {count} times — exceeded the per-tool safety limit. Producing final answer with results collected so far."
+    Include intervening operations so rebuilding the same file after editing its
+    contents is progress, even when the build command and stdout are unchanged.
+    IDs and descriptions are transport/UI noise and cannot refresh a stuck loop.
+    """
+    call_hash = _hash_tool_calls(calls)
+    previous = None
+    for index in range(len(messages) - 2, -1, -1):
+        message = messages[index]
+        if getattr(message, "type", None) == "human" and not getattr(message, "additional_kwargs", {}).get("hide_from_ui"):
+            break
+        earlier = getattr(message, "tool_calls", None)
+        if earlier and _hash_tool_calls(earlier) == call_hash:
+            previous = index
+            break
+    if previous is None:
+        return None
+    cycle = []
+    pending = set()
+    for message in messages[previous:-1]:
+        earlier = getattr(message, "tool_calls", None)
+        if earlier:
+            pending.update(call["id"] for call in earlier)
+            cycle.append(("calls", _hash_tool_calls(earlier)))
+        if getattr(message, "type", None) == "tool":
+            pending.discard(message.tool_call_id)
+            cycle.append(("result", message.content, getattr(message, "status", None), getattr(message, "artifact", None), getattr(message, "additional_kwargs", {})))
+    if pending or not any(item[0] == "result" for item in cycle):
+        return None
+    return hashlib.sha256(json.dumps((call_hash, cycle), sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
 class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
@@ -191,28 +189,16 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
     construct via :meth:`from_config` to ensure values pass Pydantic validation.
 
     Args:
-        warn_threshold: Number of identical tool call sets before injecting
+        warn_threshold: Number of unchanged completed input/result cycles before injecting
             a warning message. Default: 3.
-        hard_limit: Number of identical tool call sets before stripping
+        hard_limit: Number of unchanged completed input/result cycles before stripping
             tool_calls entirely. Default: 5.
         window_size: Size of the sliding window for tracking calls.
             Default: 20.
         max_tracked_threads: Maximum number of threads to track before
             evicting the least recently used. Default: 100.
-        tool_freq_warn: Number of calls to the same tool *type* (regardless
-            of arguments) before injecting a frequency warning. Catches
-            cross-file read loops that hash-based detection misses.
-            Default: 30.
-        tool_freq_hard_limit: Number of calls to the same tool type before
-            forcing a stop. Default: 50.
-        tool_freq_overrides: Per-tool overrides for frequency thresholds,
-            keyed by tool name. Each value is a ``(warn, hard_limit)`` tuple
-            that replaces ``tool_freq_warn`` / ``tool_freq_hard_limit`` for
-            that specific tool. Tools not listed here fall back to the global
-            thresholds. Useful for raising limits on intentionally
-            high-frequency tools (e.g. ``bash`` in batch pipelines) without
-            weakening protection on all other tools. Default: ``None``
-            (no overrides).
+        tool_freq_warn, tool_freq_hard_limit, tool_freq_overrides: Deprecated
+            compatibility arguments. Raw tool frequency never stops a run.
     """
 
     def __init__(
@@ -376,14 +362,8 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
     def _track_and_check(self, state: AgentState, runtime: Runtime) -> tuple[str | None, bool]:
         """Track tool calls and check for loops.
 
-        Two detection layers:
-          1. **Hash-based** (existing): catches identical tool call sets.
-          2. **Frequency-based** (new): catches the same *tool type* being
-             called many times with varying arguments (e.g. ``read_file``
-             on 40 different files).
-
-        Returns:
-            (warning_message_or_none, should_hard_stop)
+        Only completed, repeated input/result cycles can trigger a pause.
+        A high frequency of useful calls is never itself evidence of a loop.
         """
         messages = state.get("messages", [])
         if not messages:
@@ -398,7 +378,9 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
             return None, False
 
         thread_id = self._get_thread_id(runtime)
-        call_hash = _hash_tool_calls(tool_calls)
+        call_hash = _completed_cycle_key(messages, tool_calls)
+        if call_hash is None:
+            return None, False
 
         with self._lock:
             # Touch / create entry (move to end for LRU)
@@ -422,7 +404,7 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
             count = history.count(call_hash)
             tool_names = [tc.get("name", "?") for tc in tool_calls]
 
-            # --- Layer 1: hash-based (identical call sets) ---
+            # Completed cycles with unchanged inputs and results.
             if count >= self.hard_limit:
                 logger.error(
                     "Loop hard limit reached — forcing stop",
@@ -449,45 +431,6 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
                         },
                     )
                     return _WARNING_MSG, False
-
-            # --- Layer 2: per-tool-type frequency ---
-            freq = self._tool_freq[thread_id]
-            for tc in tool_calls:
-                name = tc.get("name", "")
-                if not name:
-                    continue
-                freq[name] += 1
-                tc_count = freq[name]
-
-                if name in self._tool_freq_overrides:
-                    eff_warn, eff_hard = self._tool_freq_overrides[name]
-                else:
-                    eff_warn, eff_hard = self.tool_freq_warn, self.tool_freq_hard_limit
-
-                if tc_count >= eff_hard:
-                    logger.error(
-                        "Tool frequency hard limit reached — forcing stop",
-                        extra={
-                            "thread_id": thread_id,
-                            "tool_name": name,
-                            "count": tc_count,
-                        },
-                    )
-                    return _TOOL_FREQ_HARD_STOP_MSG.format(tool_name=name, count=tc_count), True
-
-                if tc_count >= eff_warn:
-                    warned = self._tool_freq_warned[thread_id]
-                    if name not in warned:
-                        warned.add(name)
-                        logger.warning(
-                            "Tool frequency warning — too many calls to same tool type",
-                            extra={
-                                "thread_id": thread_id,
-                                "tool_name": name,
-                                "count": tc_count,
-                            },
-                        )
-                        return _TOOL_FREQ_WARNING_MSG.format(tool_name=name, count=tc_count), False
 
         return None, False
 
@@ -588,12 +531,12 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
 
     @override
     def before_agent(self, state: AgentState, runtime: Runtime) -> dict | None:
-        self._clear_other_run_pending_warnings(runtime)
+        self.reset(self._get_thread_id(runtime))
         return None
 
     @override
     async def abefore_agent(self, state: AgentState, runtime: Runtime) -> dict | None:
-        self._clear_other_run_pending_warnings(runtime)
+        self.reset(self._get_thread_id(runtime))
         return None
 
     @override
