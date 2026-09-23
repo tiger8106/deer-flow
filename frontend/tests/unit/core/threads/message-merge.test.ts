@@ -16,6 +16,7 @@ import {
   MAX_CONSECUTIVE_EMPTY_RUN_LOADS,
   mergeLiveMessageSnapshots,
   mergeMessages,
+  normalizePptProcessingOrder,
   pruneConfirmedArchivedMessages,
   removeSetItems,
   resolvePreservedHistory,
@@ -49,6 +50,30 @@ test("retains an earlier live turn when a settled snapshot contains only the lat
     ...firstTurn,
     ...secondTurn,
   ]);
+});
+
+test("keeps the submitted human message before an early PPT processing snapshot", () => {
+  const processing = {
+    id: "ppt-ai-1",
+    type: "ai",
+    content: "正在分析图片",
+    additional_kwargs: { ppt_processing: true },
+  } as Message;
+  const human = {
+    id: "human-2",
+    type: "human",
+    content: "把两张图转成PPT",
+  } as Message;
+
+  expect(normalizePptProcessingOrder([processing, human])).toEqual([
+    human,
+    processing,
+  ]);
+  expect(mergeLiveMessageSnapshots([], [processing, human])).toEqual([
+    human,
+    processing,
+  ]);
+  expect(mergeMessages([], [processing], [human])).toEqual([human, processing]);
 });
 
 test("mergeMessages removes duplicate messages already present in history", () => {

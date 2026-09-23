@@ -23,6 +23,7 @@ import { useI18n } from "../i18n/hooks";
 import {
   isHiddenFromUIMessage,
   isInternalStreamMetadata,
+  isPptProcessingMessage,
 } from "../messages/utils";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
@@ -199,6 +200,56 @@ function messageSeq(message: Message): number | undefined {
     : undefined;
 }
 
+/**
+ * A values snapshot can briefly contain the first assistant message before
+ * the submitted human message arrives through the messages-tuple channel.
+ * During PPT work those assistant messages carry a server marker, so move a
+ * following human message in front of that still-open processing block. This
+ * keeps the visible turn order stable while the stream catches up; completed
+ * answers are never moved because they do not carry the marker.
+ */
+export function normalizePptProcessingOrder(messages: Message[]): Message[] {
+  const result = [...messages];
+  let index = 0;
+  while (index < result.length) {
+    if (!isPptProcessingMessage(result[index]!)) {
+      index += 1;
+      continue;
+    }
+
+    let nextHuman = index + 1;
+    while (nextHuman < result.length && result[nextHuman]?.type !== "human") {
+      if (
+        result[nextHuman]?.type !== "ai" &&
+        result[nextHuman]?.type !== "tool"
+      ) {
+        break;
+      }
+      nextHuman += 1;
+    }
+    if (result[nextHuman]?.type !== "human") {
+      index += 1;
+      continue;
+    }
+
+    const between = result.slice(index, nextHuman);
+    if (
+      between.some(
+        (message) =>
+          message.type !== "tool" && !isPptProcessingMessage(message),
+      )
+    ) {
+      index += 1;
+      continue;
+    }
+
+    const [human] = result.splice(nextHuman, 1);
+    result.splice(index, 0, human!);
+    index += 1;
+  }
+  return result;
+}
+
 function dedupeMessagesByIdentity(messages: Message[]): Message[] {
   const lastIndexByIdentity = new Map<string, number>();
   const lastVisibleIndexByIdentity = new Map<string, number>();
@@ -279,7 +330,7 @@ export function mergeLiveMessageSnapshots(
       merged.push(message);
     }
   }
-  return merged;
+  return normalizePptProcessingOrder(merged);
 }
 
 function dedupeRunMessagesByIdentity(messages: RunMessage[]): RunMessage[] {
@@ -556,7 +607,7 @@ export function mergeMessages(
     );
   }
 
-  return merged.map((message) => {
+  return normalizePptProcessingOrder(merged).map((message) => {
     const identity = messageIdentity(message);
     if (
       identity &&

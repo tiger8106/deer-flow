@@ -160,3 +160,5 @@ MIT License. See [LICENSE](../LICENSE) for details.
 Conversation history preserves the persisted position of reasoning and tool steps when checkpoint compaction retains only the surrounding human messages and answers. Live content updates replace shared messages in place.
 
 Tiger processing uses the existing thought fold for the entire timeline. It opens during the run and closes on completion; users can reopen it. Internal commands and skill-document activity are omitted from this display while original messages remain available to the agent.
+
+PPT generation progress is server-marked with `ppt_processing` and remains inside the thought fold until delivery, so intermediate prose does not flash as a temporary answer bubble. Live thread snapshots also normalize a delayed human message ahead of that processing block; the persisted message identities remain unchanged.

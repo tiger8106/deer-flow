@@ -134,7 +134,9 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
       // (#3868). Intermediate reasoning (no content) and tool-calling steps
       // still belong in the processing group.
       const becomesAssistantBubble =
-        hasContent(message) && !hasToolCalls(message);
+        hasContent(message) &&
+        !hasToolCalls(message) &&
+        !isPptProcessingMessage(message);
 
       if (hasPresentFiles(message)) {
         groups.push({
@@ -150,7 +152,9 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
         });
       } else if (
         !becomesAssistantBubble &&
-        (hasReasoning(message) || hasToolCalls(message))
+        (hasReasoning(message) ||
+          hasToolCalls(message) ||
+          isPptProcessingMessage(message))
       ) {
         const lastGroup = groups[groups.length - 1];
         // Accumulate consecutive intermediate AI messages into one processing group.
@@ -524,6 +528,16 @@ export function hasToolCalls(message: Message) {
   return (
     message.type === "ai" && message.tool_calls && message.tool_calls.length > 0
   );
+}
+
+/**
+ * PPT model turns are still progress until finish_ppt records delivery. Keep
+ * this as an explicit server-owned marker instead of guessing from prompt
+ * text or tool names; repair turns and content-only intermediate responses
+ * then follow the same presentation rule.
+ */
+export function isPptProcessingMessage(message: Message) {
+  return message.additional_kwargs?.ppt_processing === true;
 }
 
 export function hasPresentFiles(message: Message) {

@@ -12,6 +12,7 @@ import {
   getStreamingMessageLookup,
   isInternalStreamMetadata,
   isHiddenFromUIMessage,
+  isPptProcessingMessage,
   hasContent,
   hasReasoning,
   isAssistantMessageGroupStreaming,
@@ -63,6 +64,32 @@ test("assigns unique fallback keys to id-less assistant bubbles", () => {
   expect(groups.map((group) => group.id)).toEqual([
     "ui-message-group-0",
     "ui-message-group-1",
+  ]);
+});
+
+test("keeps PPT progress text inside the processing group until delivery", () => {
+  const message = {
+    id: "ppt-progress-1",
+    type: "ai",
+    content: "正在分析图片并准备版式",
+    additional_kwargs: { ppt_processing: true },
+  } as Message;
+
+  expect(isPptProcessingMessage(message)).toBe(true);
+  expect(getMessageGroups([message])).toEqual([
+    {
+      id: "ppt-progress-1",
+      type: "assistant:processing",
+      messages: [message],
+    },
+  ]);
+});
+
+test("keeps ordinary content-only assistant messages as answer bubbles", () => {
+  const message = aiMessage("普通回答");
+  expect(isPptProcessingMessage(message)).toBe(false);
+  expect(getMessageGroups([message]).map((group) => group.type)).toEqual([
+    "assistant",
   ]);
 });
 
