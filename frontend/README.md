@@ -125,8 +125,10 @@ src/
 ```
 
 Conversation artifact cards are message-group scoped through
-`additional_kwargs.presented_files`; the cumulative thread artifact list remains
-available to the header panel and preview selector.
+`additional_kwargs.presented_files`; PPT delivery cards are moved after the
+following assistant answer, and internal `review.json` files are filtered from
+that card. The cumulative thread artifact list remains available to the header
+panel and preview selector.
 
 ## Scripts
 

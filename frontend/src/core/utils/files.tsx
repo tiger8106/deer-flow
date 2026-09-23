@@ -8,6 +8,8 @@ import {
   ImageIcon,
 } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 const extensionMap: Record<string, string> = {
   // Text
   txt: "text",
@@ -219,10 +221,69 @@ export function getFileExtensionDisplayName(filepath: string) {
   }
 }
 
+function OfficeStyleFileIcon({
+  label,
+  color,
+  className,
+}: {
+  label: string;
+  color: string;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-sm text-xs leading-none font-bold shadow-sm",
+        className,
+        color,
+        "text-white",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function getFileIcon(filepath: string, className?: string) {
   const extension = getFileExtension(filepath);
   const { isCodeFile } = checkCodeFile(filepath);
   switch (extension) {
+    case "ppt":
+    case "pptx":
+      return (
+        <OfficeStyleFileIcon
+          label="P"
+          color="bg-[#d24726]"
+          className={className}
+        />
+      );
+    case "doc":
+    case "docx":
+      return (
+        <OfficeStyleFileIcon
+          label="W"
+          color="bg-[#2b579a]"
+          className={className}
+        />
+      );
+    case "xls":
+    case "xlsx":
+      return (
+        <OfficeStyleFileIcon
+          label="X"
+          color="bg-[#217346]"
+          className={className}
+        />
+      );
+    case "pdf":
+      return (
+        <OfficeStyleFileIcon
+          label="A"
+          color="bg-[#d32f2f]"
+          className={className}
+        />
+      );
     case "skill":
       return <FileCogIcon className={className} />;
     case "html":

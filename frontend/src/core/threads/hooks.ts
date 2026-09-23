@@ -256,6 +256,32 @@ function dedupeMessagesByIdentity(messages: Message[]): Message[] {
     });
 }
 
+/**
+ * Checkpoint values can briefly contain only the latest turn after a stream
+ * settles. Keep the last complete live snapshot while overlaying newer
+ * messages so a follow-up turn cannot disappear until the history endpoint is
+ * refetched. Stable message/tool ids replace their previous snapshot; legacy
+ * identity-less objects are retained by reference only.
+ */
+export function mergeLiveMessageSnapshots(
+  previous: Message[],
+  current: Message[],
+): Message[] {
+  const merged = [...previous];
+  for (const message of current) {
+    const identity = messageIdentity(message);
+    const existingIndex = identity
+      ? merged.findIndex((item) => messageIdentity(item) === identity)
+      : merged.indexOf(message);
+    if (existingIndex >= 0) {
+      merged[existingIndex] = message;
+    } else {
+      merged.push(message);
+    }
+  }
+  return merged;
+}
+
 function dedupeRunMessagesByIdentity(messages: RunMessage[]): RunMessage[] {
   const lastIndexByIdentity = new Map<string, number>();
   messages.forEach((message, index) => {
@@ -1237,6 +1263,7 @@ export function useThreadStream({
   const latestMessageCountsRef = useRef({ humanMessageCount });
   const sendInFlightRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
+  const messagesRefThreadId = useRef<string | null>(threadId ?? null);
   // Synchronous bridge for messages rescued from context summarization. The
   // archived-history `setState` (via appendMessages) lands on a different
   // schedule than the live thread external store, so the merge reads this buffer
@@ -1257,6 +1284,13 @@ export function useThreadStream({
 
   latestMessageCountsRef.current = { humanMessageCount };
   summarizedRef.current ??= new Set<string>();
+
+  // Do not let a previous conversation's cached stream snapshot flash into a
+  // newly selected thread before the effect below runs.
+  if (messagesRefThreadId.current !== (threadId ?? null)) {
+    messagesRef.current = [];
+    messagesRefThreadId.current = threadId ?? null;
+  }
 
   // Reset thread-local pending UI state when switching between threads so
   // optimistic messages and in-flight guards do not leak across chat views.
@@ -1622,11 +1656,18 @@ export function useThreadStream({
     ],
   );
 
-  // Cache the latest thread messages in a ref to compare against incoming history messages for deduplication,
-  // and to allow access to the full message list in onUpdateEvent without causing re-renders.
-  if (persistedMessages.length >= messagesRef.current.length) {
-    messagesRef.current = persistedMessages;
-  }
+  // Cache a union of live snapshots. A settled checkpoint can temporarily
+  // shrink to the latest turn, but the history request may still be catching
+  // up; retaining the prior snapshot prevents the previous turn or the new
+  // user message from blinking out in that window.
+  const priorLiveMessages = messagesRef.current.filter(
+    (message) => !message.id || !pendingSupersededMessageIds.has(message.id),
+  );
+  const liveMessagesForDisplay = mergeLiveMessageSnapshots(
+    priorLiveMessages,
+    persistedMessages,
+  );
+  messagesRef.current = liveMessagesForDisplay;
 
   const visibleOptimisticMessages = getVisibleOptimisticMessages(
     optimisticThreadId === currentViewThreadId ? optimisticMessages : [],
@@ -1646,7 +1687,7 @@ export function useThreadStream({
       : visibleHistory;
   const mergedMessages = mergeMessages(
     effectiveHistory,
-    persistedMessages,
+    liveMessagesForDisplay,
     visibleOptimisticMessages,
   );
   const pendingUsageMessages = thread.isLoading

@@ -54,6 +54,18 @@ test("hides injected memory and explicitly hidden middleware messages", () => {
   ).toEqual([]);
 });
 
+test("assigns unique fallback keys to id-less assistant bubbles", () => {
+  const groups = getMessageGroups([
+    { type: "ai", content: "第一条回复" },
+    { type: "ai", content: "第二条回复" },
+  ] as Message[]);
+
+  expect(groups.map((group) => group.id)).toEqual([
+    "ui-message-group-0",
+    "ui-message-group-1",
+  ]);
+});
+
 test("aggregates token usage messages once per assistant turn", () => {
   const messages = [
     {
@@ -341,6 +353,13 @@ describe("human message internal context stripping", () => {
   test("strips slash skill activation context from display content", () => {
     const content =
       "<slash_skill_activation>\n<skill_content># Secret SKILL.md</skill_content>\n</slash_skill_activation>\nreal user task";
+
+    expect(stripUploadedFilesTag(content)).toBe("real user task");
+  });
+
+  test("strips escaped upload context and prompt boundary markers", () => {
+    const content =
+      "--- BEGIN USER INPUT ---\n&lt;uploaded_files&gt;\ninternal file instructions\n&lt;/uploaded_files&gt;\nreal user task\n--- END USER INPUT ---";
 
     expect(stripUploadedFilesTag(content)).toBe("real user task");
   });

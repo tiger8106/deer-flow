@@ -653,8 +653,10 @@ def test_merge_run_context_overrides_noop_for_empty_context():
 def test_merge_run_context_overrides_forwards_context_only_keys():
     """``github_token`` and ``disable_clarification`` must reach ``config['context']``
     (runtime context → ``runtime.context``) so the bash tool and ClarificationMiddleware
-    can read them. They must NOT be written to ``config['configurable']`` — that dict is
-    persisted in checkpoints, and ``github_token`` is a (short-lived) secret.
+    can read them. The web UI's ``title_locale`` follows the same runtime-only path so
+    the title middleware can honor the selected language without persisting UI state.
+    They must NOT be written to ``config['configurable']`` — that dict is persisted in
+    checkpoints, and ``github_token`` is a (short-lived) secret.
 
     Regression for the GitHub channel: without this, the installation token minted by
     ``ChannelManager._apply_channel_policy`` was silently dropped here, so ``gh``
@@ -670,6 +672,7 @@ def test_merge_run_context_overrides_forwards_context_only_keys():
             "github_token": "ghs_installation_token",
             "disable_clarification": True,
             "agent_name": "coding-llm-gateway",
+            "title_locale": "zh-CN",
         },
     )
 
@@ -677,10 +680,12 @@ def test_merge_run_context_overrides_forwards_context_only_keys():
     assert config["context"]["github_token"] == "ghs_installation_token"
     assert config["context"]["disable_clarification"] is True
     assert config["context"]["agent_name"] == "coding-llm-gateway"
+    assert config["context"]["title_locale"] == "zh-CN"
 
     # NOT written into configurable (checkpoint-persisted).
     assert "github_token" not in config.get("configurable", {})
     assert "disable_clarification" not in config.get("configurable", {})
+    assert "title_locale" not in config.get("configurable", {})
 
 
 def test_merge_run_context_overrides_forwards_business_extensions_only_at_runtime():

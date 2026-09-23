@@ -57,13 +57,19 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
     return null;
   }
 
-  for (const message of messages) {
+  for (const [messageIndex, message] of messages.entries()) {
     if (isHiddenFromUIMessage(message)) {
       continue;
     }
 
+    // Provider-created messages normally carry an id. Keep a unique UI-only
+    // fallback for legacy/replayed messages without one; otherwise two
+    // consecutive terminal responses share React's `undefined` key and one
+    // response can disappear until the thread is reloaded.
+    const groupId = message.id ?? `ui-message-group-${messageIndex}`;
+
     if (message.type === "human") {
-      groups.push({ id: message.id, type: "human", messages: [message] });
+      groups.push({ id: groupId, type: "human", messages: [message] });
       continue;
     }
 
@@ -73,7 +79,7 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
         // then also open a standalone clarification group for prominent display.
         lastOpenGroup()?.messages.push(message);
         groups.push({
-          id: message.id,
+          id: groupId,
           type: "assistant:clarification",
           messages: [message],
         });
@@ -132,13 +138,13 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
 
       if (hasPresentFiles(message)) {
         groups.push({
-          id: message.id,
+          id: groupId,
           type: "assistant:present-files",
           messages: [message],
         });
       } else if (hasSubagent(message)) {
         groups.push({
-          id: message.id,
+          id: groupId,
           type: "assistant:subagent",
           messages: [message],
         });
@@ -150,7 +156,7 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
         // Accumulate consecutive intermediate AI messages into one processing group.
         if (lastGroup?.type !== "assistant:processing") {
           groups.push({
-            id: message.id,
+            id: groupId,
             type: "assistant:processing",
             messages: [message],
           });
@@ -160,7 +166,7 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
       }
 
       if (becomesAssistantBubble) {
-        groups.push({ id: message.id, type: "assistant", messages: [message] });
+        groups.push({ id: groupId, type: "assistant", messages: [message] });
       }
     }
   }
@@ -589,7 +595,23 @@ export function extractPresentedFilesFromMessage(message: Message) {
       // Older failed/partial delivery messages are not file publications.
     }
   }
-  return [...new Set(files)];
+  const uniqueFiles = [...new Set(files)];
+  // review.json is a private PPT validation report, never a user-facing file.
+  return uniqueFiles.filter((path) => !isPptReviewArtifactPath(path));
+}
+
+export function isPptDeliveryMessage(message: Message) {
+  return (
+    message.additional_kwargs?.ppt_delivery === true ||
+    (message.type === "tool" && message.name === "finish_ppt") ||
+    extractPresentedFilesFromMessage(message).some((path) =>
+      /\.(?:pptx?|potx?)$/i.test(path),
+    )
+  );
+}
+
+export function isPptReviewArtifactPath(path: string) {
+  return path.split("/").pop()?.toLowerCase() === "review.json";
 }
 
 export function hasSubagent(message: AIMessage) {
@@ -640,13 +662,21 @@ export interface FileInMessage {
 }
 
 /**
- * Strip backend-injected human context tags from message content.
- * Kept under its historical name because callers use it for uploaded-file
- * display cleanup.
+ * Strip backend-injected human context from message content.
+ *
+ * The normal upload middleware uses XML tags, while older/replayed messages
+ * can contain HTML-escaped tags inside the prompt-sanitization boundary. Both
+ * forms are transport context, not text the user typed, so callers must remove
+ * them before rendering or copying a human message.
  */
 export function stripUploadedFilesTag(content: string): string {
   return content
-    .replace(/<(uploaded_files|slash_skill_activation)>[\s\S]*?<\/\1>/g, "")
+    .replace(/^\s*--- BEGIN USER INPUT ---\s*/i, "")
+    .replace(/\s*--- END USER INPUT ---\s*$/i, "")
+    .replace(
+      /(?:<|&lt;)\s*(uploaded_files|slash_skill_activation)\s*(?:>|&gt;)[\s\S]*?(?:<|&lt;)\s*\/\s*\1\s*(?:>|&gt;)/gi,
+      "",
+    )
     .trim();
 }
 

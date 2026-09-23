@@ -48,6 +48,8 @@ import {
   extractTextFromMessage,
   getAssistantTurnCopyData,
   getAssistantTurnUsageMessages,
+  isPptDeliveryMessage,
+  isPptReviewArtifactPath,
   getMessageGroups,
   getActiveTurnStartIndex,
   getStreamingMessageLookup,
@@ -55,6 +57,7 @@ import {
   hasReasoning,
   isAssistantMessageGroupStreaming,
   isHiddenFromUIMessage,
+  type MessageGroup as MessageGroupModel,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import {
@@ -121,8 +124,7 @@ export function getArtifactPathsForDisplay(
       paths.add(path);
     }
   }
-
-  return [...paths];
+  return [...paths].filter((path) => !isPptReviewArtifactPath(path));
 }
 
 export function getArtifactPathsForGroup(
@@ -135,6 +137,52 @@ export function getArtifactPathsForGroup(
     }
   }
   return [...paths];
+}
+
+export function getArtifactPathsForGroups(
+  groups: readonly MessageGroupModel[],
+): string[][] {
+  const pathsByGroup = groups.map((group) =>
+    getArtifactPathsForGroup(group.messages),
+  );
+
+  // finish_ppt is a tool result, so it naturally lands in the thinking group.
+  // Move only PPT delivery files to the next completed assistant bubble; this
+  // keeps the ordinary answer first while preserving the existing placement of
+  // other tools' artifacts.
+  groups.forEach((group, groupIndex) => {
+    if (
+      pathsByGroup[groupIndex]?.length === 0 ||
+      !group.messages.some(isPptDeliveryMessage)
+    ) {
+      return;
+    }
+
+    let targetIndex = -1;
+    for (let index = groupIndex + 1; index < groups.length; index += 1) {
+      const candidate = groups[index];
+      if (!candidate || candidate.type === "human") {
+        break;
+      }
+      if (candidate.type === "assistant") {
+        targetIndex = index;
+        break;
+      }
+    }
+    if (targetIndex === -1) {
+      return;
+    }
+
+    pathsByGroup[targetIndex] = [
+      ...new Set([
+        ...(pathsByGroup[targetIndex] ?? []),
+        ...(pathsByGroup[groupIndex] ?? []),
+      ]),
+    ];
+    pathsByGroup[groupIndex] = [];
+  });
+
+  return pathsByGroup;
 }
 
 type SelectionToolbarState = {
@@ -372,6 +420,10 @@ export function MessageList({
   }, [thread.isLoading]);
   const messages = thread.messages;
   const groupedMessages = getMessageGroups(messages);
+  const artifactPathsByGroup = useMemo(
+    () => getArtifactPathsForGroups(groupedMessages),
+    [groupedMessages],
+  );
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     string | null
   >(null);
@@ -814,7 +866,7 @@ export function MessageList({
             const turnUsageMessages = turnUsageMessagesByGroupIndex[groupIndex];
             const groupIsLoading =
               thread.isLoading && groupIndex >= activeTurnStartIndex;
-            const groupArtifactPaths = getArtifactPathsForGroup(group.messages);
+            const groupArtifactPaths = artifactPathsByGroup[groupIndex] ?? [];
 
             if (group.type === "human" || group.type === "assistant") {
               return (
@@ -874,6 +926,18 @@ export function MessageList({
                       </div>
                     );
                   })}
+                  {group.type === "assistant" &&
+                    groupArtifactPaths.length > 0 && (
+                      <div
+                        className="mb-4"
+                        data-testid="conversation-artifacts"
+                      >
+                        <ArtifactFileList
+                          files={groupArtifactPaths}
+                          threadId={threadId}
+                        />
+                      </div>
+                    )}
                   {renderTokenUsage({
                     messages: group.messages,
                     turnUsageMessages,

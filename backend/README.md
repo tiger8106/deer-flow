@@ -301,8 +301,9 @@ Key sections:
 - `memory` - Memory system settings (enabled, storage, debounce, facts limits)
 
 The web client sends the selected UI locale in each run's `context.title_locale` (`zh-CN` or
-`en-US`). TitleMiddleware uses that locale for the title prompt and validates model output, so
-Chinese users get Chinese titles and English users get English titles. When the locale is not
+`en-US`). Gateway forwards this value into runtime context only (not checkpointed
+`configurable` state). TitleMiddleware uses it for the title prompt and validates model output,
+so Chinese users get Chinese titles and English users get English titles. When the locale is not
 provided by another client, the historical content-language fallback remains available.
 
 Provider note:

@@ -14,6 +14,7 @@ import {
   getSummarizationMiddlewareMessages,
   getVisibleOptimisticMessages,
   MAX_CONSECUTIVE_EMPTY_RUN_LOADS,
+  mergeLiveMessageSnapshots,
   mergeMessages,
   pruneConfirmedArchivedMessages,
   removeSetItems,
@@ -33,6 +34,22 @@ function runMessage(seq?: number): RunMessage {
     created_at: "2026-05-22T00:00:00Z",
   };
 }
+
+test("retains an earlier live turn when a settled snapshot contains only the latest turn", () => {
+  const firstTurn = [
+    { id: "human-1", type: "human", content: "第一张图" },
+    { id: "answer-1", type: "ai", content: "已完成第一份PPT" },
+  ] as Message[];
+  const secondTurn = [
+    { id: "human-2", type: "human", content: "第二张图" },
+    { id: "answer-2", type: "ai", content: "已完成第二份PPT" },
+  ] as Message[];
+
+  expect(mergeLiveMessageSnapshots(firstTurn, secondTurn)).toEqual([
+    ...firstTurn,
+    ...secondTurn,
+  ]);
+});
 
 test("mergeMessages removes duplicate messages already present in history", () => {
   const human = {
