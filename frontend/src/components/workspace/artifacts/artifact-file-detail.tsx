@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CodeEditor } from "@/components/workspace/code-editor";
+import { supportsDocumentPreview } from "@/core/artifacts/document-preview";
 import { useArtifactContent } from "@/core/artifacts/hooks";
 import {
   appendHtmlPreviewBaseHref,
@@ -61,6 +62,7 @@ import { useThread } from "../messages/context";
 import { Tooltip } from "../tooltip";
 
 import { useArtifacts } from "./context";
+import { DocumentPreview } from "./document-preview";
 import { artifactMarkdownPlugins } from "./markdown-preview-plugins";
 
 const WRITE_FILE_PREVIEW_REFRESH_INTERVAL_MS = 3000;
@@ -142,6 +144,7 @@ export function ArtifactFileDetail({
   const canPreviewInBrowser = useMemo(() => {
     return canBrowserPreviewFile(filepath);
   }, [filepath]);
+  const isDocumentPreview = !isWriteFile && supportsDocumentPreview(filepath);
   const isSupportPreview = useMemo(() => {
     return language === "html" || language === "markdown";
   }, [language]);
@@ -211,13 +214,16 @@ export function ArtifactFileDetail({
   return (
     <Artifact className={cn(className)}>
       <ArtifactHeader className="px-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <ArtifactTitle>
             {isWriteFile ? (
               <div className="px-2">{getFileName(filepath)}</div>
             ) : (
               <Select value={filepath} onValueChange={select}>
-                <SelectTrigger className="border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0">
+                <SelectTrigger
+                  title={getFileName(filepath)}
+                  className="max-w-full min-w-0 border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0"
+                >
                   <SelectValue placeholder="Select a file" />
                 </SelectTrigger>
                 <SelectContent className="select-none">
@@ -256,7 +262,7 @@ export function ArtifactFileDetail({
             </ToggleGroup>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <ArtifactActions>
             {!isWriteFile && filepath.endsWith(".skill") && isAdmin && (
               <Tooltip content={t.toolCalls.skillInstallTooltip}>
@@ -357,13 +363,21 @@ export function ArtifactFileDetail({
             readonly
           />
         )}
-        {!isCodeFile && canPreviewInBrowser && (
+        {isDocumentPreview && (
+          <DocumentPreview
+            key={`${threadId}:${filepath}`}
+            filepath={filepath}
+            threadId={threadId}
+          />
+        )}
+        {!isCodeFile && !isDocumentPreview && canPreviewInBrowser && (
           <iframe
             className="size-full"
+            title={getFileName(filepath)}
             src={urlOfArtifact({ filepath, threadId, isMock })}
           />
         )}
-        {!isCodeFile && !canPreviewInBrowser && (
+        {!isCodeFile && !isDocumentPreview && !canPreviewInBrowser && (
           <ArtifactDownloadFallback
             filepath={filepath}
             threadId={threadId}

@@ -9,7 +9,10 @@ import {
 import { useSidebar } from "@/components/ui/sidebar";
 import { env } from "@/env";
 
-import { ExternalPreviewProvider } from "../external-preview";
+import {
+  ExternalPreviewProvider,
+  useExternalPreview,
+} from "../external-preview";
 
 export interface ArtifactsContextType {
   artifacts: string[];
@@ -34,18 +37,30 @@ interface ArtifactsProviderProps {
 }
 
 export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
+  return (
+    <ExternalPreviewProvider
+      initialArtifactsVisible={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"}
+    >
+      <ArtifactsStateProvider>{children}</ArtifactsStateProvider>
+    </ExternalPreviewProvider>
+  );
+}
+
+function ArtifactsStateProvider({ children }: ArtifactsProviderProps) {
+  const { artifactsVisible, showArtifacts, hideArtifacts } =
+    useExternalPreview();
   const [artifacts, setArtifacts] = useState<string[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [autoSelect, setAutoSelect] = useState(true);
-  const [open, setOpen] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
-  );
   const [autoOpen, setAutoOpen] = useState(true);
   const { setOpen: setSidebarOpen } = useSidebar();
 
   const select = useCallback(
     (artifact: string, autoSelect = false) => {
       setSelectedArtifact(artifact);
+      if (!autoSelect) {
+        showArtifacts();
+      }
       if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true") {
         setSidebarOpen(false);
       }
@@ -53,20 +68,20 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
         setAutoSelect(false);
       }
     },
-    [setSidebarOpen, setSelectedArtifact, setAutoSelect],
+    [setSidebarOpen, setSelectedArtifact, setAutoSelect, showArtifacts],
   );
 
   const deselect = useCallback(() => {
     setSelectedArtifact(null);
     setAutoSelect(true);
-    setOpen(false);
-  }, []);
+    hideArtifacts();
+  }, [hideArtifacts]);
 
   const value: ArtifactsContextType = {
     artifacts,
     setArtifacts,
 
-    open,
+    open: artifactsVisible,
     autoOpen,
     autoSelect,
     setOpen: (isOpen: boolean) => {
@@ -74,7 +89,8 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
         setAutoOpen(false);
         setAutoSelect(false);
       }
-      setOpen(isOpen);
+      if (isOpen) showArtifacts();
+      else hideArtifacts();
     },
 
     selectedArtifact,
@@ -83,11 +99,9 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
   };
 
   return (
-    <ExternalPreviewProvider>
-      <ArtifactsContext.Provider value={value}>
-        {children}
-      </ArtifactsContext.Provider>
-    </ExternalPreviewProvider>
+    <ArtifactsContext.Provider value={value}>
+      {children}
+    </ArtifactsContext.Provider>
   );
 }
 

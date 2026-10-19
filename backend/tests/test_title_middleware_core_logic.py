@@ -395,10 +395,11 @@ class TestTitleMiddlewareCoreLogic:
         assert "<uploaded_files>" not in prompt
         assert "The following files were uploaded" not in prompt
 
-    def test_non_image_upload_keeps_local_title_and_removes_upload_protocol(self, monkeypatch):
+    def test_non_image_upload_uses_generated_content_and_removes_upload_protocol(self, monkeypatch):
         _set_test_title_config(max_chars=30, model_name=None)
         middleware = TitleMiddleware()
-        create_chat_model = MagicMock()
+        model = MagicMock(ainvoke=AsyncMock(return_value=AIMessage(content="年度经营情况总结")))
+        create_chat_model = MagicMock(return_value=model)
         monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
         state = {
             "messages": [
@@ -412,8 +413,10 @@ class TestTitleMiddlewareCoreLogic:
 
         result = asyncio.run(middleware._agenerate_title_result(state))
 
-        assert result == {"title": "请总结报告"}
-        create_chat_model.assert_not_called()
+        assert result == {"title": "年度经营情况总结"}
+        prompt = model.ainvoke.await_args.args[0]
+        assert "年度经营情况" in prompt
+        assert "<uploaded_files>" not in prompt
 
     def test_image_title_model_failure_falls_back_to_question_and_extracted_information(self, monkeypatch):
         _set_test_title_config(max_chars=40, model_name=None)
@@ -469,11 +472,11 @@ class TestTitleMiddlewareCoreLogic:
         monkeypatch.setattr(middleware, "_agenerate_title_result", AsyncMock(return_value=None))
         assert asyncio.run(middleware.aafter_model({"messages": []}, runtime=MagicMock())) is None
 
-    def test_aafter_model_uses_local_fallback_when_no_title_model_is_configured(self, monkeypatch):
-        """Default async path must not block stream completion on a second LLM call."""
+    def test_aafter_model_uses_default_model_when_no_title_model_is_configured(self, monkeypatch):
+        """Completed conversations use semantic titles even without a dedicated model."""
         _set_test_title_config(max_chars=20, model_name=None)
         middleware = TitleMiddleware()
-        create_chat_model = MagicMock()
+        create_chat_model = MagicMock(return_value=MagicMock(ainvoke=AsyncMock(return_value=AIMessage(content="测试编写"))))
         monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
 
         state = {
@@ -484,14 +487,14 @@ class TestTitleMiddlewareCoreLogic:
         }
         result = asyncio.run(middleware.aafter_model(state, runtime=MagicMock()))
 
-        assert result == {"title": "请帮我写测试"}
-        create_chat_model.assert_not_called()
+        assert result == {"title": "测试编写"}
+        create_chat_model.assert_called_once_with(name=None, thinking_enabled=False, attach_tracing=False)
 
-    def test_async_generate_title_result_uses_local_fallback_without_model_name(self, monkeypatch):
-        """The default async helper path avoids the hidden title-model LLM call."""
+    def test_async_generate_title_result_falls_back_when_default_model_fails(self, monkeypatch):
+        """Model failures retain the locale-compatible local fallback."""
         _set_test_title_config(max_chars=20, model_name=None)
         middleware = TitleMiddleware()
-        create_chat_model = MagicMock()
+        create_chat_model = MagicMock(side_effect=RuntimeError("unavailable"))
         monkeypatch.setattr(title_middleware_module, "create_chat_model", create_chat_model)
 
         state = {
@@ -503,7 +506,7 @@ class TestTitleMiddlewareCoreLogic:
         result = asyncio.run(middleware._agenerate_title_result(state))
 
         assert result == {"title": "流式回答结束后不要再等待标题模型"}
-        create_chat_model.assert_not_called()
+        create_chat_model.assert_called_once_with(name=None, thinking_enabled=False, attach_tracing=False)
 
     def test_async_local_fallback_does_not_format_unused_prompt_template(self, monkeypatch):
         """Local fallback should not depend on the LLM prompt template."""

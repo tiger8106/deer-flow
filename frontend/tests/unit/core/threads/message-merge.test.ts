@@ -16,7 +16,8 @@ import {
   MAX_CONSECUTIVE_EMPTY_RUN_LOADS,
   mergeLiveMessageSnapshots,
   mergeMessages,
-  normalizePptProcessingOrder,
+  preserveSubmittedInputOrder,
+  removeUnacknowledgedInput,
   pruneConfirmedArchivedMessages,
   removeSetItems,
   resolvePreservedHistory,
@@ -36,6 +37,35 @@ function runMessage(seq?: number): RunMessage {
   };
 }
 
+test("late historical rows never move a submitted input before its journal predecessors", () => {
+  const messages = [
+    {
+      id: "old",
+      type: "ai",
+      content: "older",
+      additional_kwargs: { deerflow_seq: 1 },
+    },
+    {
+      id: "progress",
+      type: "ai",
+      content: "working",
+      additional_kwargs: { deerflow_seq: 4 },
+    },
+    {
+      id: "input",
+      type: "human",
+      content: "new",
+      additional_kwargs: { deerflow_seq: 3 },
+    },
+  ] as Message[];
+  expect(
+    preserveSubmittedInputOrder(messages, {
+      messageId: "input",
+      baselineIds: new Set(),
+    }).map((m) => m.id),
+  ).toEqual(["old", "input", "progress"]);
+});
+
 test("retains an earlier live turn when a settled snapshot contains only the latest turn", () => {
   const firstTurn = [
     { id: "human-1", type: "human", content: "第一张图" },
@@ -52,7 +82,7 @@ test("retains an earlier live turn when a settled snapshot contains only the lat
   ]);
 });
 
-test("keeps the submitted human message before an early PPT processing snapshot", () => {
+test("does not move the next user turn ahead of an interrupted processing turn", () => {
   const processing = {
     id: "ppt-ai-1",
     type: "ai",
@@ -65,15 +95,107 @@ test("keeps the submitted human message before an early PPT processing snapshot"
     content: "把两张图转成PPT",
   } as Message;
 
-  expect(normalizePptProcessingOrder([processing, human])).toEqual([
-    human,
-    processing,
-  ]);
   expect(mergeLiveMessageSnapshots([], [processing, human])).toEqual([
-    human,
     processing,
+    human,
   ]);
-  expect(mergeMessages([], [processing], [human])).toEqual([human, processing]);
+  expect(mergeMessages([], [processing], [human])).toEqual([processing, human]);
+});
+
+test("late canonical snapshot restores input position without losing intermediate steps", () => {
+  const human = { id: "h", type: "human", content: "图片" } as Message;
+  const processing = { id: "p", type: "ai", content: "分析" } as Message;
+  const answer = { id: "a", type: "ai", content: "已完成" } as Message;
+  const result = mergeLiveMessageSnapshots(
+    [processing, answer],
+    [human, answer],
+  );
+  expect(result.map((m) => m.id)).toEqual(["h", "p", "a"]);
+});
+
+test("live content wins while retaining turns absent from a shortened snapshot", () => {
+  const h1 = { id: "h1", type: "human", content: "第一张" } as Message;
+  const a1 = { id: "a1", type: "ai", content: "第一份" } as Message;
+  const h2 = { id: "h2", type: "human", content: "第二张" } as Message;
+  const a2 = { id: "a2", type: "ai", content: "第二份" } as Message;
+  const next = { ...a2, content: "第二份完成" } as Message;
+  expect(mergeLiveMessageSnapshots([h1, a1, h2, a2], [h2, next])).toEqual([
+    h1,
+    a1,
+    h2,
+    next,
+  ]);
+});
+
+test("optimistic acknowledgement uses identity even after compaction changes human count", () => {
+  const human = { id: "submitted", type: "human", content: "图片" } as Message;
+  expect(getVisibleOptimisticMessages([human], 3, 1, [human])).toEqual([]);
+  expect(
+    getVisibleOptimisticMessages([human], 0, 3, [{ ...human, id: "older" }]),
+  ).toEqual([human]);
+});
+
+test("pinned user input stays before early assistant chunks that omit that input", () => {
+  const first = { id: "a1", type: "ai", content: "第一份完成" } as Message;
+  const human = { id: "h2", type: "human", content: "再生成" } as Message;
+  const early = { id: "a2", type: "ai", content: "开始" } as Message;
+  expect(mergeLiveMessageSnapshots([first, human], [first, early])).toEqual([
+    first,
+    human,
+    early,
+  ]);
+});
+
+test("submitted input remains ahead of its response across reordered and compacted snapshots", () => {
+  const old = { id: "a1", type: "ai", content: "第一份完成" } as Message;
+  const human = { id: "h2", type: "human", content: "第二次生成" } as Message;
+  const early = { id: "a2", type: "ai", content: "处理中" } as Message;
+  const submitted = { messageId: "h2", baselineIds: new Set(["message:a1"]) };
+  let cached = [old, human];
+  for (const snapshot of [
+    [old, early],
+    [old, early, human],
+    [old, human, early],
+    [early],
+  ]) {
+    cached = preserveSubmittedInputOrder(
+      mergeLiveMessageSnapshots(cached, snapshot),
+      submitted,
+    );
+    expect(cached.map((message) => message.id)).toEqual(["a1", "h2", "a2"]);
+  }
+});
+
+test("known journal positions take precedence over snapshot arrival order", () => {
+  const human = {
+    id: "h",
+    type: "human",
+    content: "图片",
+    additional_kwargs: { deerflow_seq: 3 },
+  } as Message;
+  const ai = {
+    id: "a",
+    type: "ai",
+    content: "生成",
+    additional_kwargs: { deerflow_seq: 4 },
+  } as Message;
+  expect(mergeLiveMessageSnapshots([human, ai], [ai, human])).toEqual([
+    human,
+    ai,
+  ]);
+});
+
+test("admission failures remove only unacknowledged inputs, not accepted turns", () => {
+  const old = { id: "a1", type: "ai", content: "完成" } as Message;
+  const human = { id: "h2", type: "human", content: "再生成" } as Message;
+  const submitted = { messageId: "h2", baselineIds: new Set(["message:a1"]) };
+  expect(removeUnacknowledgedInput([old, human], submitted, false)).toEqual([
+    old,
+  ]);
+  expect(removeUnacknowledgedInput([old, human], submitted, true)).toEqual([
+    old,
+    human,
+  ]);
 });
 
 test("mergeMessages removes duplicate messages already present in history", () => {

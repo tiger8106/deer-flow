@@ -23,7 +23,6 @@ import { useI18n } from "../i18n/hooks";
 import {
   isHiddenFromUIMessage,
   isInternalStreamMetadata,
-  isPptProcessingMessage,
 } from "../messages/utils";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
@@ -102,11 +101,13 @@ type RegeneratePrepareResponse = {
 };
 
 export function buildThreadSubmitMessages({
+  messageId,
   text,
   additionalKwargs,
   additionalInputMessages = [],
   filesForSubmit = [],
 }: {
+  messageId?: string;
   text: string;
   additionalKwargs?: Record<string, unknown>;
   additionalInputMessages?: Message[];
@@ -116,6 +117,7 @@ export function buildThreadSubmitMessages({
     ...additionalInputMessages,
     {
       type: "human",
+      ...(messageId ? { id: messageId } : {}),
       content: [
         {
           type: "text",
@@ -200,56 +202,6 @@ function messageSeq(message: Message): number | undefined {
     : undefined;
 }
 
-/**
- * A values snapshot can briefly contain the first assistant message before
- * the submitted human message arrives through the messages-tuple channel.
- * During PPT work those assistant messages carry a server marker, so move a
- * following human message in front of that still-open processing block. This
- * keeps the visible turn order stable while the stream catches up; completed
- * answers are never moved because they do not carry the marker.
- */
-export function normalizePptProcessingOrder(messages: Message[]): Message[] {
-  const result = [...messages];
-  let index = 0;
-  while (index < result.length) {
-    if (!isPptProcessingMessage(result[index]!)) {
-      index += 1;
-      continue;
-    }
-
-    let nextHuman = index + 1;
-    while (nextHuman < result.length && result[nextHuman]?.type !== "human") {
-      if (
-        result[nextHuman]?.type !== "ai" &&
-        result[nextHuman]?.type !== "tool"
-      ) {
-        break;
-      }
-      nextHuman += 1;
-    }
-    if (result[nextHuman]?.type !== "human") {
-      index += 1;
-      continue;
-    }
-
-    const between = result.slice(index, nextHuman);
-    if (
-      between.some(
-        (message) =>
-          message.type !== "tool" && !isPptProcessingMessage(message),
-      )
-    ) {
-      index += 1;
-      continue;
-    }
-
-    const [human] = result.splice(nextHuman, 1);
-    result.splice(index, 0, human!);
-    index += 1;
-  }
-  return result;
-}
-
 function dedupeMessagesByIdentity(messages: Message[]): Message[] {
   const lastIndexByIdentity = new Map<string, number>();
   const lastVisibleIndexByIdentity = new Map<string, number>();
@@ -318,19 +270,87 @@ export function mergeLiveMessageSnapshots(
   previous: Message[],
   current: Message[],
 ): Message[] {
-  const merged = [...previous];
-  for (const message of current) {
-    const identity = messageIdentity(message);
-    const existingIndex = identity
-      ? merged.findIndex((item) => messageIdentity(item) === identity)
-      : merged.indexOf(message);
-    if (existingIndex >= 0) {
-      merged[existingIndex] = message;
+  const keyOf = (message: Message) => messageIdentity(message) ?? message;
+  const latest = dedupeMessagesByIdentity(current);
+  const latestKeys = new Set(latest.map(keyOf));
+  const merged = mergeMessages(previous, latest, []);
+  if (!previous.some((message) => latestKeys.has(keyOf(message)))) {
+    return merged;
+  }
+  // The latest snapshot owns the order of shared identities. Preserve omitted
+  // steps before their next shared anchor; message type cannot identify a turn.
+  const retainedBefore = new Map<string | Message, Message[]>();
+  let pending: Message[] = [];
+  let lastShared: string | Message | undefined;
+  for (const message of dedupeMessagesByIdentity(previous)) {
+    const key = keyOf(message);
+    if (latestKeys.has(key)) {
+      retainedBefore.set(key, pending);
+      lastShared = key;
+      pending = [];
     } else {
-      merged.push(message);
+      pending.push(message);
     }
   }
-  return normalizePptProcessingOrder(merged);
+  const contentByKey = new Map(
+    merged.map((message) => [keyOf(message), message]),
+  );
+  const ordered = [
+    ...latest.flatMap((message) => [
+      ...(retainedBefore.get(keyOf(message)) ?? []),
+      contentByKey.get(keyOf(message)) ?? message,
+      ...(keyOf(message) === lastShared ? pending : []),
+    ]),
+  ];
+  // Journal positions override arrival order. Only reorder known positions;
+  // unpersisted chunks keep their anchor until their sequence is available.
+  const sequenced = ordered
+    .filter((message) => messageSeq(message) !== undefined)
+    .sort((left, right) => messageSeq(left)! - messageSeq(right)!);
+  let seqIndex = 0;
+  return ordered.map((message) =>
+    messageSeq(message) === undefined ? message : sequenced[seqIndex++]!,
+  );
+}
+
+export type SubmittedTurn = {
+  messageId: string;
+  baselineIds: ReadonlySet<string>;
+};
+
+export function preserveSubmittedInputOrder(
+  messages: Message[],
+  submitted: SubmittedTurn | null,
+): Message[] {
+  if (!submitted) return messages;
+  const inputIndex = messages.findIndex(
+    (message) => message.id === submitted.messageId,
+  );
+  const inputSeq =
+    inputIndex >= 0 ? messageSeq(messages[inputIndex]!) : undefined;
+  const firstNewIndex = messages.findIndex((message) => {
+    const identity = messageIdentity(message);
+    const seq = messageSeq(message);
+    if (inputSeq !== undefined && seq !== undefined && seq < inputSeq)
+      return false;
+    return identity && !submitted.baselineIds.has(identity);
+  });
+  if (inputIndex < 0 || firstNewIndex < 0 || inputIndex <= firstNewIndex)
+    return messages;
+  const ordered = [...messages];
+  const [input] = ordered.splice(inputIndex, 1);
+  ordered.splice(firstNewIndex, 0, input!);
+  return ordered;
+}
+
+export function removeUnacknowledgedInput(
+  messages: Message[],
+  submitted: SubmittedTurn | null,
+  accepted: boolean,
+): Message[] {
+  return submitted && !accepted
+    ? messages.filter((message) => message.id !== submitted.messageId)
+    : messages;
 }
 
 function dedupeRunMessagesByIdentity(messages: RunMessage[]): RunMessage[] {
@@ -607,7 +627,7 @@ export function mergeMessages(
     );
   }
 
-  return normalizePptProcessingOrder(merged).map((message) => {
+  return merged.map((message) => {
     const identity = messageIdentity(message);
     if (
       identity &&
@@ -741,7 +761,17 @@ export function getVisibleOptimisticMessages(
   optimisticMessages: Message[],
   previousHumanMessageCount: number,
   currentHumanMessageCount: number,
+  serverMessages?: Message[],
 ): Message[] {
+  if (serverMessages) {
+    const submitted = optimisticMessages.find(
+      (message) => message.type === "human",
+    );
+    return submitted?.id &&
+      serverMessages.some((message) => message.id === submitted.id)
+      ? []
+      : optimisticMessages;
+  }
   if (
     optimisticMessages.some((message) => message.type === "human") &&
     currentHumanMessageCount > previousHumanMessageCount
@@ -1237,7 +1267,13 @@ export function useThreadStream({
         }
       }
     },
-    onError(error) {
+    onError(error, run) {
+      messagesRef.current = removeUnacknowledgedInput(
+        messagesRef.current,
+        submittedTurnRef.current,
+        Boolean(run?.run_id),
+      );
+      submittedTurnRef.current = null;
       setOptimisticMessages([]);
       setOptimisticThreadId(null);
       setLiveMessagesThreadId(null);
@@ -1280,7 +1316,9 @@ export function useThreadStream({
   }, [displayThreadId, isMock, queryClient, thread, threadId]);
 
   const hasVisibleStreamState =
-    Boolean(threadId) || liveMessagesThreadId === currentViewThreadId;
+    (Boolean(threadId) && onStreamThreadId === threadId) ||
+    (Boolean(currentViewThreadId) &&
+      liveMessagesThreadId === currentViewThreadId);
   const liveMessages = thread.messages;
   const getLiveMessageMetadata = thread.getMessagesMetadata;
   const persistedMessages = useMemo(
@@ -1305,8 +1343,8 @@ export function useThreadStream({
     ],
   );
   const visibleHistory = useMemo(
-    () => (threadId ? history : []),
-    [history, threadId],
+    () => (threadId && onStreamThreadId === threadId ? history : []),
+    [history, onStreamThreadId, threadId],
   );
   const humanMessageCount = persistedMessages.filter(
     (m) => m.type === "human",
@@ -1314,7 +1352,8 @@ export function useThreadStream({
   const latestMessageCountsRef = useRef({ humanMessageCount });
   const sendInFlightRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
-  const messagesRefThreadId = useRef<string | null>(threadId ?? null);
+  const messagesRefThreadId = useRef<string | null>(currentViewThreadId);
+  const submittedTurnRef = useRef<SubmittedTurn | null>(null);
   // Synchronous bridge for messages rescued from context summarization. The
   // archived-history `setState` (via appendMessages) lands on a different
   // schedule than the live thread external store, so the merge reads this buffer
@@ -1338,9 +1377,10 @@ export function useThreadStream({
 
   // Do not let a previous conversation's cached stream snapshot flash into a
   // newly selected thread before the effect below runs.
-  if (messagesRefThreadId.current !== (threadId ?? null)) {
+  if (messagesRefThreadId.current !== currentViewThreadId) {
     messagesRef.current = [];
-    messagesRefThreadId.current = threadId ?? null;
+    submittedTurnRef.current = null;
+    messagesRefThreadId.current = currentViewThreadId;
   }
 
   // Reset thread-local pending UI state when switching between threads so
@@ -1349,6 +1389,7 @@ export function useThreadStream({
     startedRef.current = false;
     sendInFlightRef.current = false;
     messagesRef.current = [];
+    submittedTurnRef.current = null;
     pendingArchivedMessagesRef.current = [];
     pendingArchiveThreadIdRef.current = null;
     summarizedRef.current = new Set<string>();
@@ -1357,7 +1398,7 @@ export function useThreadStream({
     setPendingSupersededMessageIds(new Set());
     prevHumanMsgCountRef.current =
       latestMessageCountsRef.current.humanMessageCount;
-  }, [threadId]);
+  }, [currentViewThreadId]);
 
   // Release archive-buffer entries once the canonical history state has absorbed
   // them, so the synchronous bridge stays transient and never resurrects a
@@ -1405,13 +1446,25 @@ export function useThreadStream({
   useEffect(() => {
     if (optimisticMessageCount === 0) return;
 
-    const newHumanMsgArrived = humanMessageCount > prevHumanMsgCountRef.current;
+    const newHumanMsgArrived =
+      getVisibleOptimisticMessages(
+        optimisticMessages,
+        prevHumanMsgCountRef.current,
+        humanMessageCount,
+        persistedMessages,
+      ).length === 0;
 
     if (!hasHumanOptimistic || newHumanMsgArrived) {
       setOptimisticMessages([]);
       setOptimisticThreadId(null);
     }
-  }, [hasHumanOptimistic, humanMessageCount, optimisticMessageCount]);
+  }, [
+    hasHumanOptimistic,
+    humanMessageCount,
+    optimisticMessageCount,
+    optimisticMessages,
+    persistedMessages,
+  ]);
 
   const sendMessage = useCallback(
     async (
@@ -1430,6 +1483,7 @@ export function useThreadStream({
       options?.onSent?.();
 
       const text = message.text.trim();
+      const messageId = crypto.randomUUID();
 
       // Capture the current human message count before showing optimistic
       // messages so we can wait for the server's copy of the user input.
@@ -1459,7 +1513,7 @@ export function useThreadStream({
       if (!hideFromUI) {
         newOptimistic.push({
           type: "human",
-          id: `opt-human-${Date.now()}`,
+          id: messageId,
           content: text ? [{ type: "text", text }] : "",
           additional_kwargs: optimisticAdditionalKwargs,
         });
@@ -1559,15 +1613,28 @@ export function useThreadStream({
           }),
         );
 
+        const submittedMessages = buildThreadSubmitMessages({
+          messageId,
+          text,
+          additionalKwargs: options?.additionalKwargs,
+          additionalInputMessages: options?.additionalInputMessages,
+          filesForSubmit,
+        });
+        // Pin the actual submitted identity before any assistant token arrives.
+        // Optimistic and persisted copies now reconcile without human counts or
+        // task-specific reordering, even if the checkpoint was compacted.
+        submittedTurnRef.current = {
+          messageId,
+          baselineIds: new Set(
+            messagesRef.current.map(messageIdentity).filter(isNonEmptyString),
+          ),
+        };
+        messagesRef.current = mergeLiveMessageSnapshots(
+          messagesRef.current,
+          submittedMessages,
+        );
         await thread.submit(
-          {
-            messages: buildThreadSubmitMessages({
-              text,
-              additionalKwargs: options?.additionalKwargs,
-              additionalInputMessages: options?.additionalInputMessages,
-              filesForSubmit,
-            }),
-          },
+          { messages: submittedMessages },
           {
             threadId: threadId,
             streamSubgraphs: true,
@@ -1588,6 +1655,10 @@ export function useThreadStream({
           queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
         });
       } catch (error) {
+        messagesRef.current = messagesRef.current.filter(
+          (item) => item.id !== messageId,
+        );
+        submittedTurnRef.current = null;
         setOptimisticMessages([]);
         setOptimisticThreadId(null);
         setLiveMessagesThreadId(null);
@@ -1714,9 +1785,9 @@ export function useThreadStream({
   const priorLiveMessages = messagesRef.current.filter(
     (message) => !message.id || !pendingSupersededMessageIds.has(message.id),
   );
-  const liveMessagesForDisplay = mergeLiveMessageSnapshots(
-    priorLiveMessages,
-    persistedMessages,
+  const liveMessagesForDisplay = preserveSubmittedInputOrder(
+    mergeLiveMessageSnapshots(priorLiveMessages, persistedMessages),
+    submittedTurnRef.current,
   );
   messagesRef.current = liveMessagesForDisplay;
 
@@ -1724,6 +1795,7 @@ export function useThreadStream({
     optimisticThreadId === currentViewThreadId ? optimisticMessages : [],
     prevHumanMsgCountRef.current,
     humanMessageCount,
+    persistedMessages,
   );
 
   // Overlay the summarization rescue buffer only onto the history of the thread
@@ -1787,18 +1859,26 @@ export function useThreadHistory(
   const [hasMorePages, setHasMorePages] = useState(true);
   const [messageRows, setMessageRows] = useState<RunMessage[]>([]);
   const [appendedMessages, setAppendedMessages] = useState<Message[]>([]);
+  const [messagesThreadId, setMessagesThreadId] = useState(threadId);
 
   const supersededRunIds = useMemo(() => {
     return getSupersededRunIds(runs.data, pendingSupersededRunIds);
   }, [pendingSupersededRunIds, runs.data]);
 
   const messages = useMemo(() => {
+    if (messagesThreadId !== threadId) return [];
     return buildVisibleHistoryMessages(
       messageRows,
       supersededRunIds,
       appendedMessages,
     );
-  }, [appendedMessages, messageRows, supersededRunIds]);
+  }, [
+    appendedMessages,
+    messageRows,
+    messagesThreadId,
+    supersededRunIds,
+    threadId,
+  ]);
 
   const loadMessages = useCallback(async () => {
     if (!enabled || !threadIdRef.current) {
@@ -1885,6 +1965,7 @@ export function useThreadHistory(
       setHasMorePages(true);
       setMessageRows([]);
       setAppendedMessages([]);
+      setMessagesThreadId(threadId);
     }
 
     if (!enabled) {

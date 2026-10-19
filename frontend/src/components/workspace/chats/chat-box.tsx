@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   threadId,
 }) => {
   const { thread } = useThread();
+  const { t } = useI18n();
   const isMobile = useIsMobile();
   const pathname = usePathname();
   const threadIdRef = useRef(threadId);
@@ -62,6 +64,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const pendingPercentRef = useRef(40);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
+  useEffect(() => () => deselect(), [deselect]);
   useEffect(() => {
     const threadArtifacts = Array.isArray(thread.values.artifacts)
       ? thread.values.artifacts
@@ -173,6 +176,8 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      if (event.source !== externalPreviewFrameRef.current?.contentWindow)
+        return;
       if (
         event.origin === window.location.origin &&
         event.data?.type === "deerflow:external-preview:close"
@@ -209,13 +214,31 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const rightPanelContent = useMemo(() => {
     if (renderedRightPanel === "external-preview" && externalPreview.preview) {
       return (
-        <iframe
-          ref={externalPreviewFrameRef}
-          key={externalPreview.preview.requestId}
-          className="size-full border-0"
-          src={externalPreview.preview.url}
-          title={externalPreview.preview.title}
-        />
+        <div className="flex size-full min-h-0 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
+            <span
+              className="min-w-0 truncate"
+              title={externalPreview.preview.title}
+            >
+              {externalPreview.preview.title}
+            </span>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t.common.close}
+              onClick={externalPreview.close}
+            >
+              <XIcon />
+            </Button>
+          </div>
+          <iframe
+            ref={externalPreviewFrameRef}
+            key={externalPreview.preview.requestId}
+            className="min-h-0 w-full flex-1 border-0"
+            src={externalPreview.preview.url}
+            title={externalPreview.preview.title}
+          />
+        </div>
       );
     }
     if (renderedRightPanel === "sidecar") {
@@ -274,7 +297,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     threadId,
     artifacts,
     externalPreview.preview,
+    externalPreview.close,
     setArtifactsOpen,
+    t.common.close,
   ]);
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {

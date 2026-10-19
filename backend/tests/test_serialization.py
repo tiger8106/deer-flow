@@ -3,6 +3,18 @@
 from __future__ import annotations
 
 
+def test_processing_presentation_is_present_on_first_stream_chunk():
+    from langchain_core.messages import AIMessageChunk
+
+    from deerflow.runtime.serialization import serialize
+
+    chunk = AIMessageChunk(content="正在分析", id="a")
+    payload = serialize((chunk, {"deerflow_processing": True}), mode="messages")
+    assert payload[0]["additional_kwargs"]["deerflow_processing"] is True
+    assert chunk.additional_kwargs == {}
+    assert "deerflow_processing" not in serialize((chunk, {}), mode="messages")[0]["additional_kwargs"]
+
+
 class _FakePydanticV2:
     """Object with model_dump (Pydantic v2)."""
 

@@ -125,7 +125,13 @@ def serialize_messages_tuple(obj: Any) -> Any:
     """Serialize a messages-mode tuple ``(chunk, metadata)``."""
     if isinstance(obj, tuple) and len(obj) == 2:
         chunk, metadata = obj
-        return [serialize_lc_object(chunk), metadata if isinstance(metadata, dict) else {}]
+        payload = serialize_lc_object(chunk)
+        metadata = metadata if isinstance(metadata, dict) else {}
+        # Extensions set model metadata before invocation. Carry presentation
+        # onto the first token, not only the post-model checkpoint response.
+        if metadata.get("deerflow_processing") is True and isinstance(payload, dict) and payload.get("type") in {"ai", "AIMessageChunk"}:
+            payload = {**payload, "additional_kwargs": {**(payload.get("additional_kwargs") or {}), "deerflow_processing": True}}
+        return [payload, metadata]
     return serialize_lc_object(obj)
 
 

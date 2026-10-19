@@ -73,7 +73,7 @@ The frontend is a stateful chat application. Users create **threads** (conversat
 
 Human input requests are a structured message protocol layered on normal chat history. The backend writes request payloads to `ToolMessage.artifact.human_input`, `src/core/messages/human-input.ts` owns the runtime validators/types, and `src/components/workspace/messages/human-input-card.tsx` renders the reusable card. `MessageList` owns answered/latest/pending state for visible cards, but derives answered responses from raw `thread.messages` because replies are hidden; pending cards clear when the hidden reply appears, when dispatch is dropped, or when a new `thread.error` reports an async stream failure. Page-level submit callbacks must send a normal human message and put `hide_from_ui: true` plus the response payload in the fourth `sendMessage(..., options)` argument as `options.additionalKwargs`; the third argument remains run context such as `{ agent_name }`. Composer entry points should disable normal bottom input while `hasOpenHumanInputRequest(...)` is true so users answer through the card and preserve response metadata.
 
-Tool-calling AI messages can contain user-visible text as well as `tool_calls`. `core/messages/utils.ts` keeps these turns in an `assistant:processing` group, and `components/workspace/messages/message-group.tsx` must render the visible text as a processing step instead of treating the message as only tool metadata. This preserves provider text such as error explanations or "trying another approach" notes during tool-heavy runs. PPT middleware also marks pre-delivery content-only turns with `ppt_processing`; they stay in the same processing group until `ppt_delivery`, while `core/threads/hooks.ts` repairs the transient human-before-processing order when values and messages-tuple snapshots arrive out of order.
+Tool-calling AI messages can contain user-visible text as well as `tool_calls`. `core/messages/utils.ts` keeps these turns in an `assistant:processing` group, and `components/workspace/messages/message-group.tsx` renders their visible text as processing steps. Extensions can mark content-only progress with generic `deerflow_processing` model metadata, propagated to message chunks before the first token; legacy `ppt_processing` checkpoints remain readable. Completed answers stay outside processing. Thread merging uses stable submitted identities and journal sequence positions, never message type or a business-specific guess about turn boundaries, to reconcile out-of-order and shortened snapshots.
 
 ### Key Patterns
 
@@ -104,15 +104,22 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   other implementation identifiers into the fallback label; keep those values
   available only to internal protocols and diagnostics.
 
-- `components/workspace/external-preview` owns generic right-panel iframe
-  state. Citation URLs opt in only with `preview=side-panel`, may carry an
+- `components/workspace/external-preview` owns mutually exclusive external
+  iframe and artifact visibility for the shared right preview pane. The
+  latest explicit selection wins; closing does not restore a prior preview.
+  Citation URLs opt in only with `preview=side-panel`, may carry an
   opaque `preview_key` for iframe reuse, and keep domain-specific preview,
   navigation, and highlighting in the external module.
-- `components/workspace/chats/chat-box.tsx` arbitrates external preview,
-  sidecar, and artifact panels in that priority order and handles same-origin
+- `components/workspace/chats/chat-box.tsx` renders external preview,
+  sidecar, and artifact panels and handles same-origin, frame-source-checked
   `deerflow:external-preview:*` messages from the embedded page. External
   previews are scoped to the active thread and must close when the thread
   changes or the chat view unmounts.
+- Office artifact previews fetch authorized local PDF renders through
+  `?preview=true`; `artifacts/document-preview.tsx` owns timeout, abort,
+  retry, and blob cleanup. The producer contract is documented in
+  `backend/docs/ARTIFACT_PREVIEW.md`; domain-specific generation stays outside
+  DeerFlow.
 - `DEER_FLOW_WORKSPACE_APPS` is a deployment-owned JSON array consumed by the
   server layout. `core/workspace-apps` validates it, `/workspace/[app_id]`
   renders the iframe, and the sidebar renders its configured entries. Apps may

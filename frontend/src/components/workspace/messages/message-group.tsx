@@ -33,7 +33,7 @@ import {
   extractContentFromMessage,
   extractReasoningContentFromMessage,
   findToolCallResult,
-  isPptProcessingMessage,
+  isProcessingMessage,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { useToolDisplayLabels } from "@/core/tools/context";
@@ -596,15 +596,12 @@ function convertToSteps(messages: Message[], isLoading: boolean): CoTStep[] {
         isLoading &&
         messageIndex === messages.length - 1 &&
         !message.tool_calls?.length;
-      const pptProcessing = isPptProcessingMessage(message);
+      const processing = isProcessingMessage(message);
       const internal = (message.tool_calls ?? []).some(isInternalToolCall);
       const content = internal
         ? ""
-        : visibleProcessingText(
-            extractContentFromMessage(message),
-            streaming && !pptProcessing,
-          );
-      if (content && (message.tool_calls?.length || pptProcessing)) {
+        : visibleProcessingText(extractContentFromMessage(message), streaming);
+      if (content && (message.tool_calls?.length || processing)) {
         steps.push({
           id: `${message.id ?? `ai-${messageIndex}`}-content`,
           messageId: message.id,
@@ -616,7 +613,7 @@ function convertToSteps(messages: Message[], isLoading: boolean): CoTStep[] {
         ? ""
         : visibleProcessingText(
             extractReasoningContentFromMessage(message) ?? "",
-            streaming && !pptProcessing,
+            streaming,
           );
       if (reasoning) {
         const step: CoTReasoningStep = {

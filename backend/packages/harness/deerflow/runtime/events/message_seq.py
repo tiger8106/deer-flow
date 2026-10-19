@@ -14,15 +14,14 @@ __all__ = ["MessageSeqStamper", "stamp_messages_with_seq"]
 
 
 class MessageSeqStamper:
-    """Resolve each message identity at most once during one stream run."""
+    """Cache persisted positions, retry identities whose journal write is pending."""
 
-    __slots__ = ("_store", "_thread_id", "_seqs", "_missing")
+    __slots__ = ("_store", "_thread_id", "_seqs")
 
     def __init__(self, store: Any, thread_id: str) -> None:
         self._store = store
         self._thread_id = thread_id
         self._seqs: dict[str, int] = {}
-        self._missing: set[str] = set()
 
     async def stamp(self, payload: Any) -> Any:
         if self._store is None or not isinstance(payload, Mapping):
@@ -31,15 +30,8 @@ class MessageSeqStamper:
         if not isinstance(messages, list) or not messages:
             return payload
 
-        identities = [
-            message_identity(message) if isinstance(message, Mapping) else None
-            for message in messages
-        ]
-        unresolved = {
-            identity
-            for identity in identities
-            if identity is not None and identity not in self._seqs and identity not in self._missing
-        }
+        identities = [message_identity(message) if isinstance(message, Mapping) else None for message in messages]
+        unresolved = {identity for identity in identities if identity is not None and identity not in self._seqs}
         if unresolved:
             try:
                 found = await self._store.get_message_seqs(self._thread_id, sorted(unresolved))
@@ -51,7 +43,6 @@ class MessageSeqStamper:
                 )
                 found = {}
             self._seqs.update(found)
-            self._missing.update(unresolved - found.keys())
 
         stamped = [
             {
@@ -61,9 +52,7 @@ class MessageSeqStamper:
                     MESSAGE_SEQ_KEY: self._seqs[identity],
                 },
             }
-            if identity is not None
-            and identity in self._seqs
-            and isinstance(message, Mapping)
+            if identity is not None and identity in self._seqs and isinstance(message, Mapping)
             else message
             for message, identity in zip(messages, identities, strict=True)
         ]

@@ -12,6 +12,15 @@ const baseContext = {
   reasoning_effort: undefined,
 };
 
+test("preserves the optimistic identity in the submitted human message", () => {
+  expect(
+    buildThreadSubmitMessages({
+      messageId: "submitted-human",
+      text: "生成PPT",
+    })[0]?.id,
+  ).toBe("submitted-human");
+});
+
 test("sends the Chinese UI locale in run context for title generation", () => {
   expect(
     buildThreadRunContext({

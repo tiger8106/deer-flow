@@ -42,3 +42,13 @@ def test_stream_stamper_caches_resolved_and_missing_identities():
     assert lookup.await_count == 1
     assert first["messages"][0]["additional_kwargs"]["deerflow_seq"] == 7
     assert second == first
+
+
+def test_stream_stamper_retries_positions_that_were_not_yet_persisted():
+    lookup = AsyncMock(side_effect=[{}, {"message:ai-1": 7}])
+    stamper = MessageSeqStamper(SimpleNamespace(get_message_seqs=lookup), "thread-1")
+    payload = {"messages": [{"id": "ai-1", "type": "ai", "content": "answer"}]}
+    assert "additional_kwargs" not in asyncio.run(stamper.stamp(payload))["messages"][0]
+    assert asyncio.run(stamper.stamp(payload))["messages"][0]["additional_kwargs"]["deerflow_seq"] == 7
+    asyncio.run(stamper.stamp(payload))
+    assert lookup.await_count == 2

@@ -136,7 +136,7 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
       const becomesAssistantBubble =
         hasContent(message) &&
         !hasToolCalls(message) &&
-        !isPptProcessingMessage(message);
+        !isProcessingMessage(message);
 
       if (hasPresentFiles(message)) {
         groups.push({
@@ -154,7 +154,7 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
         !becomesAssistantBubble &&
         (hasReasoning(message) ||
           hasToolCalls(message) ||
-          isPptProcessingMessage(message))
+          isProcessingMessage(message))
       ) {
         const lastGroup = groups[groups.length - 1];
         // Accumulate consecutive intermediate AI messages into one processing group.
@@ -531,13 +531,14 @@ export function hasToolCalls(message: Message) {
 }
 
 /**
- * PPT model turns are still progress until finish_ppt records delivery. Keep
- * this as an explicit server-owned marker instead of guessing from prompt
- * text or tool names; repair turns and content-only intermediate responses
- * then follow the same presentation rule.
+ * Extensions may classify progress before the first model token. Legacy PPT
+ * checkpoints retain their old marker; new workflows use the generic contract.
  */
-export function isPptProcessingMessage(message: Message) {
-  return message.additional_kwargs?.ppt_processing === true;
+export function isProcessingMessage(message: Message) {
+  return (
+    message.additional_kwargs?.deerflow_processing === true ||
+    message.additional_kwargs?.ppt_processing === true
+  );
 }
 
 export function hasPresentFiles(message: Message) {

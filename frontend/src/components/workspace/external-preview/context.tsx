@@ -22,6 +22,9 @@ export type ExternalPreview = {
 
 type ExternalPreviewContextValue = {
   preview: ExternalPreview | null;
+  artifactsVisible: boolean;
+  showArtifacts: () => void;
+  hideArtifacts: () => void;
   open: (preview: Pick<ExternalPreview, "url" | "title">) => void;
   close: () => void;
 };
@@ -29,10 +32,20 @@ type ExternalPreviewContextValue = {
 const ExternalPreviewContext =
   createContext<ExternalPreviewContextValue | null>(null);
 
-export function ExternalPreviewProvider({ children }: { children: ReactNode }) {
+export function ExternalPreviewProvider({
+  children,
+  initialArtifactsVisible = false,
+}: {
+  children: ReactNode;
+  initialArtifactsVisible?: boolean;
+}) {
   const [preview, setPreview] = useState<ExternalPreview | null>(null);
+  const [artifactsVisible, setArtifactsVisible] = useState(
+    initialArtifactsVisible,
+  );
   const requestIdRef = useRef(0);
   const open = useCallback((next: Pick<ExternalPreview, "url" | "title">) => {
+    setArtifactsVisible(false);
     setPreview((current) => {
       const nextPreviewKey = getSidePanelPreviewKey(next.url);
       const currentPreviewKey = getSidePanelPreviewKey(current?.url);
@@ -53,9 +66,21 @@ export function ExternalPreviewProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   const close = useCallback(() => setPreview(null), []);
+  const showArtifacts = useCallback(() => {
+    setPreview(null);
+    setArtifactsVisible(true);
+  }, []);
+  const hideArtifacts = useCallback(() => setArtifactsVisible(false), []);
   const value = useMemo(
-    () => ({ preview, open, close }),
-    [close, open, preview],
+    () => ({
+      preview,
+      open,
+      close,
+      artifactsVisible,
+      showArtifacts,
+      hideArtifacts,
+    }),
+    [close, open, preview, artifactsVisible, showArtifacts, hideArtifacts],
   );
   return (
     <ExternalPreviewContext.Provider value={value}>

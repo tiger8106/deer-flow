@@ -12,7 +12,7 @@ import {
   getStreamingMessageLookup,
   isInternalStreamMetadata,
   isHiddenFromUIMessage,
-  isPptProcessingMessage,
+  isProcessingMessage,
   hasContent,
   hasReasoning,
   isAssistantMessageGroupStreaming,
@@ -75,7 +75,13 @@ test("keeps PPT progress text inside the processing group until delivery", () =>
     additional_kwargs: { ppt_processing: true },
   } as Message;
 
-  expect(isPptProcessingMessage(message)).toBe(true);
+  expect(isProcessingMessage(message)).toBe(true);
+  const streamed = {
+    ...message,
+    additional_kwargs: { deerflow_processing: true },
+  } as Message;
+  expect(isProcessingMessage(streamed)).toBe(true);
+  expect(getMessageGroups([streamed])[0]?.type).toBe("assistant:processing");
   expect(getMessageGroups([message])).toEqual([
     {
       id: "ppt-progress-1",
@@ -87,7 +93,7 @@ test("keeps PPT progress text inside the processing group until delivery", () =>
 
 test("keeps ordinary content-only assistant messages as answer bubbles", () => {
   const message = aiMessage("普通回答");
-  expect(isPptProcessingMessage(message)).toBe(false);
+  expect(isProcessingMessage(message)).toBe(false);
   expect(getMessageGroups([message]).map((group) => group.type)).toEqual([
     "assistant",
   ]);

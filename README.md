@@ -795,6 +795,8 @@ This is the difference between a chatbot with tool access and an agent with an a
 
 ### Context Engineering
 
+Conversation titles summarize the completed answer and descriptive artifact metadata in the selected UI language. The `title.model_name` setting optionally selects a dedicated title model; otherwise the default model is used. If generation fails or takes longer than 10 seconds, a local fallback is used. Existing manual titles are preserved.
+
 **Isolated Sub-Agent Context**: Each sub-agent runs in its own isolated context. This means that the sub-agent will not be able to see the context of the main agent or other sub-agents. This is important to ensure that the sub-agent is able to focus on the task at hand and not be distracted by the context of the main agent or other sub-agents.
 
 **Summarization**: Within a session, DeerFlow manages context aggressively — summarizing completed sub-tasks, offloading intermediate results to the filesystem, compressing what's no longer immediately relevant. This lets it stay sharp across long, multi-step tasks without blowing the context window.
