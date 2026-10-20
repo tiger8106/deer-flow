@@ -14,28 +14,55 @@ import {
 } from "@/components/ai-elements/streamdown";
 
 import {
+  shouldCompleteStreamdownMarkdown,
   useSafeStreamdownChildren,
   useSafeStreamdownMarkdown,
 } from "./safe-children";
 
 export function SafeStreamdown({
   children,
+  parseIncompleteMarkdown,
   ...props
 }: ClipboardSafeStreamdownProps) {
   const safeChildren = useSafeStreamdownChildren(children);
+  const completeMarkdown = shouldCompleteStreamdownMarkdown(
+    safeChildren,
+    parseIncompleteMarkdown,
+  );
 
   return (
-    <ClipboardSafeStreamdown {...props}>{safeChildren}</ClipboardSafeStreamdown>
+    <ClipboardSafeStreamdown
+      key={String(completeMarkdown)}
+      {...props}
+      parseIncompleteMarkdown={completeMarkdown}
+    >
+      {safeChildren}
+    </ClipboardSafeStreamdown>
   );
 }
 
 export function SafeMessageResponse({
   children,
+  parseIncompleteMarkdown,
   ...props
 }: MessageResponseProps) {
   const safeChildren = useSafeStreamdownChildren(children);
+  const completeMarkdown = shouldCompleteStreamdownMarkdown(
+    safeChildren,
+    parseIncompleteMarkdown,
+  );
 
-  return <MessageResponse {...props}>{safeChildren}</MessageResponse>;
+  // Upstream memo comparators only compare content, not completion mode.
+  // Remount when the mode changes so a settled reply cannot retain guessed syntax.
+  return (
+    <MessageResponse
+      key={String(completeMarkdown)}
+      {...props}
+      parseIncompleteMarkdown={completeMarkdown}
+    >
+      {safeChildren}
+    </MessageResponse>
+  );
 }
 
 export function SafeReasoningContent({

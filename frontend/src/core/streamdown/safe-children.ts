@@ -9,6 +9,18 @@ import {
 
 type StreamdownChildren = ComponentProps<typeof Streamdown>["children"];
 
+export function shouldCompleteStreamdownMarkdown(
+  children: StreamdownChildren,
+  requested = true,
+): boolean {
+  // Streamdown's completion pass counts TeX stars/underscores as Markdown
+  // emphasis and appends markers after $$, swallowing its closing fence.
+  // Keep math-bearing content verbatim; never repair the actual formula.
+  return (
+    requested && !(typeof children === "string" && /(?<!\\)\$/.test(children))
+  );
+}
+
 export function getSafeStreamdownMarkdown(markdown: string): string {
   return normalizeStreamdownMathMarkdown(capMarkdownNesting(markdown));
 }
