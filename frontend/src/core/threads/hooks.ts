@@ -189,6 +189,14 @@ function messageIdentity(message: Message): string | undefined {
   ) {
     return `tool:${message.tool_call_id}`;
   }
+  const originalId = message.additional_kwargs?.deerflow_original_message_id;
+  if (
+    message.type === "human" &&
+    typeof originalId === "string" &&
+    originalId
+  ) {
+    return `message:${originalId}`;
+  }
   if (typeof message.id === "string" && message.id.length > 0) {
     return `message:${message.id}`;
   }
@@ -324,7 +332,9 @@ export function preserveSubmittedInputOrder(
 ): Message[] {
   if (!submitted) return messages;
   const inputIndex = messages.findIndex(
-    (message) => message.id === submitted.messageId,
+    (message) =>
+      message.type === "human" &&
+      messageIdentity(message) === `message:${submitted.messageId}`,
   );
   const inputSeq =
     inputIndex >= 0 ? messageSeq(messages[inputIndex]!) : undefined;
@@ -349,7 +359,10 @@ export function removeUnacknowledgedInput(
   accepted: boolean,
 ): Message[] {
   return submitted && !accepted
-    ? messages.filter((message) => message.id !== submitted.messageId)
+    ? messages.filter(
+        (message) =>
+          messageIdentity(message) !== `message:${submitted.messageId}`,
+      )
     : messages;
 }
 
@@ -768,7 +781,12 @@ export function getVisibleOptimisticMessages(
       (message) => message.type === "human",
     );
     return submitted?.id &&
-      serverMessages.some((message) => message.id === submitted.id)
+      serverMessages.some(
+        (message) =>
+          message.type === "human" &&
+          !isHiddenFromUIMessage(message) &&
+          messageIdentity(message) === messageIdentity(submitted),
+      )
       ? []
       : optimisticMessages;
   }

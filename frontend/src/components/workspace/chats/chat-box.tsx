@@ -1,4 +1,10 @@
-import { FilesIcon, XIcon } from "lucide-react";
+import {
+  DownloadIcon,
+  FilesIcon,
+  Maximize2Icon,
+  Minimize2Icon,
+  XIcon,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -22,6 +28,10 @@ import {
   useArtifacts,
 } from "../artifacts";
 import { useExternalPreview } from "../external-preview";
+import {
+  downloadPreviewFile,
+  previewDownloadUrl,
+} from "../external-preview/controls";
 import { clampPreviewPanelPercent } from "../external-preview/layout";
 import { useCloseExternalPreviewOnThreadChange } from "../external-preview/thread-lifecycle";
 import { useThread } from "../messages/context";
@@ -56,8 +66,16 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const externalPreview = useExternalPreview();
   useCloseExternalPreviewOnThreadChange(threadId, externalPreview.close);
   const externalPreviewOpen = externalPreview.preview !== null;
-  const [externalPreviewFullscreen, setExternalPreviewFullscreen] =
-    useState(false);
+  const {
+    fullscreen: externalPreviewFullscreen,
+    setFullscreen: setExternalPreviewFullscreen,
+  } = externalPreview;
+  const [previewControls, setPreviewControls] = useState<{
+    requestId: number;
+    navigationUrl: string;
+    downloadUrl?: string;
+    title?: string;
+  } | null>(null);
   const [rightPanelPercent, setRightPanelPercent] = useState(40);
   const [isResizingPreview, setIsResizingPreview] = useState(false);
   const resizeFrameRef = useRef<number | null>(null);
@@ -157,7 +175,6 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   useEffect(() => {
     if (externalPreviewOpen) return;
     setRightPanelPercent(40);
-    setExternalPreviewFullscreen(false);
   }, [externalPreviewOpen]);
 
   useEffect(() => {
@@ -178,6 +195,33 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== externalPreviewFrameRef.current?.contentWindow)
         return;
+      if (event.origin !== window.location.origin) return;
+      if (
+        event.data?.type === "deerflow:external-preview:state" &&
+        externalPreview.preview &&
+        event.data.navigationUrl ===
+          new URL(externalPreview.preview.navigationUrl, window.location.origin)
+            .href
+      ) {
+        setPreviewControls({
+          requestId: externalPreview.preview.requestId,
+          navigationUrl: externalPreview.preview.navigationUrl,
+          downloadUrl: previewDownloadUrl(
+            event.data.downloadUrl,
+            window.location.origin,
+          ),
+          title:
+            typeof event.data.title === "string"
+              ? event.data.title.slice(0, 4096)
+              : undefined,
+        });
+      }
+      if (event.data?.type === "deerflow:external-preview:ready") {
+        externalPreviewFrameRef.current?.contentWindow?.postMessage(
+          { type: "deerflow:external-preview:host", controls: true },
+          window.location.origin,
+        );
+      }
       if (
         event.origin === window.location.origin &&
         event.data?.type === "deerflow:external-preview:close"
@@ -209,27 +253,61 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [externalPreview]);
+  }, [externalPreview, setExternalPreviewFullscreen]);
 
   const rightPanelContent = useMemo(() => {
     if (renderedRightPanel === "external-preview" && externalPreview.preview) {
+      const controls =
+        previewControls?.requestId === externalPreview.preview.requestId &&
+        previewControls.navigationUrl === externalPreview.preview.navigationUrl
+          ? previewControls
+          : null;
+      const title = controls?.title ?? externalPreview.preview.title;
+      const fullscreenLabel = externalPreviewFullscreen
+        ? t.common.collapsePreview
+        : t.common.expandPreview;
       return (
-        <div className="flex size-full min-h-0 flex-col">
+        <div className="flex size-full min-h-0 min-w-0 flex-col">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
-            <span
-              className="min-w-0 truncate"
-              title={externalPreview.preview.title}
-            >
-              {externalPreview.preview.title}
+            <span className="min-w-0 flex-1 truncate" title={title}>
+              {title}
             </span>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t.common.close}
-              onClick={externalPreview.close}
-            >
-              <XIcon />
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={fullscreenLabel}
+                title={fullscreenLabel}
+                onClick={() =>
+                  setExternalPreviewFullscreen(!externalPreviewFullscreen)
+                }
+              >
+                {externalPreviewFullscreen ? (
+                  <Minimize2Icon />
+                ) : (
+                  <Maximize2Icon />
+                )}
+              </Button>
+              {controls?.downloadUrl && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={t.common.download}
+                  title={t.common.download}
+                  onClick={() => downloadPreviewFile(controls.downloadUrl!)}
+                >
+                  <DownloadIcon />
+                </Button>
+              )}
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t.common.close}
+                onClick={externalPreview.close}
+              >
+                <XIcon />
+              </Button>
+            </div>
           </div>
           <iframe
             ref={externalPreviewFrameRef}
@@ -237,6 +315,12 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
             className="min-h-0 w-full flex-1 border-0"
             src={externalPreview.preview.url}
             title={externalPreview.preview.title}
+            onLoad={() =>
+              externalPreviewFrameRef.current?.contentWindow?.postMessage(
+                { type: "deerflow:external-preview:host", controls: true },
+                window.location.origin,
+              )
+            }
           />
         </div>
       );
@@ -298,6 +382,12 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     artifacts,
     externalPreview.preview,
     externalPreview.close,
+    previewControls,
+    externalPreviewFullscreen,
+    setExternalPreviewFullscreen,
+    t.common.expandPreview,
+    t.common.collapsePreview,
+    t.common.download,
     setArtifactsOpen,
     t.common.close,
   ]);

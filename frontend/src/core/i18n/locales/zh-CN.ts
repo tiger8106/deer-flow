@@ -26,6 +26,8 @@ export const zhCN: Translations = {
     rename: "重命名",
     share: "分享",
     openInNewWindow: "在新窗口打开",
+    expandPreview: "全屏展开预览",
+    collapsePreview: "缩回预览窗口",
     close: "关闭",
     more: "更多",
     search: "搜索",

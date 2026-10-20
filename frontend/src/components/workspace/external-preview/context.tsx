@@ -23,6 +23,8 @@ export type ExternalPreview = {
 type ExternalPreviewContextValue = {
   preview: ExternalPreview | null;
   artifactsVisible: boolean;
+  fullscreen: boolean;
+  setFullscreen: (value: boolean) => void;
   showArtifacts: () => void;
   hideArtifacts: () => void;
   open: (preview: Pick<ExternalPreview, "url" | "title">) => void;
@@ -40,11 +42,13 @@ export function ExternalPreviewProvider({
   initialArtifactsVisible?: boolean;
 }) {
   const [preview, setPreview] = useState<ExternalPreview | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const [artifactsVisible, setArtifactsVisible] = useState(
     initialArtifactsVisible,
   );
   const requestIdRef = useRef(0);
   const open = useCallback((next: Pick<ExternalPreview, "url" | "title">) => {
+    setFullscreen(false);
     setArtifactsVisible(false);
     setPreview((current) => {
       const nextPreviewKey = getSidePanelPreviewKey(next.url);
@@ -65,22 +69,39 @@ export function ExternalPreviewProvider({
       };
     });
   }, []);
-  const close = useCallback(() => setPreview(null), []);
+  const close = useCallback(() => {
+    setPreview(null);
+    setFullscreen(false);
+  }, []);
   const showArtifacts = useCallback(() => {
+    setFullscreen(false);
     setPreview(null);
     setArtifactsVisible(true);
   }, []);
-  const hideArtifacts = useCallback(() => setArtifactsVisible(false), []);
+  const hideArtifacts = useCallback(() => {
+    setArtifactsVisible(false);
+    setFullscreen(false);
+  }, []);
   const value = useMemo(
     () => ({
       preview,
+      fullscreen,
+      setFullscreen,
       open,
       close,
       artifactsVisible,
       showArtifacts,
       hideArtifacts,
     }),
-    [close, open, preview, artifactsVisible, showArtifacts, hideArtifacts],
+    [
+      close,
+      open,
+      preview,
+      fullscreen,
+      artifactsVisible,
+      showArtifacts,
+      hideArtifacts,
+    ],
   );
   return (
     <ExternalPreviewContext.Provider value={value}>

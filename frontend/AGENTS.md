@@ -115,6 +115,12 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   `deerflow:external-preview:*` messages from the embedded page. External
   previews are scoped to the active thread and must close when the thread
   changes or the chat view unmounts.
+  Embedded pages announce `ready`; the host acknowledges `host` with
+  `controls: true`. Only then should the page hide its title/expand/close
+  controls and publish `state` with `navigationUrl`, `title`, and an optional
+  same-origin `downloadUrl`. The host rejects state for stale navigation and
+  owns fullscreen/download/close; domain page navigation and highlights remain
+  in the iframe. Standalone pages retain their own controls.
 - Office artifact previews fetch authorized local PDF renders through
   `?preview=true`; `artifacts/document-preview.tsx` owns timeout, abort,
   retry, and blob cleanup. The producer contract is documented in

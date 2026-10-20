@@ -35,6 +35,21 @@ async function contextHarness() {
 }
 
 describe("shared document preview selection", () => {
+  it("shares fullscreen across preview types and resets it when closing or switching", async () => {
+    const render = await contextHarness();
+    render().showArtifacts();
+    render().setFullscreen(true);
+    expect(render().fullscreen).toBe(true);
+    render().open({ url: "/source", title: "source" });
+    expect(render().fullscreen).toBe(false);
+    render().setFullscreen(true);
+    render().close();
+    expect(render().fullscreen).toBe(false);
+    render().showArtifacts();
+    render().setFullscreen(true);
+    render().hideArtifacts();
+    expect(render().fullscreen).toBe(false);
+  });
   it("shows the most recently selected type and closing never restores an older pane", async () => {
     const render = await contextHarness();
     render().showArtifacts();

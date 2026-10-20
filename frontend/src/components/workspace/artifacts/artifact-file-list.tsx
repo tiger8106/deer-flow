@@ -118,8 +118,7 @@ export function ArtifactFileList({
                     threadId: threadId,
                     download: true,
                   })}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download
                   onClick={(e) => e.stopPropagation()}
                 >
                   <DownloadIcon className="size-4" />

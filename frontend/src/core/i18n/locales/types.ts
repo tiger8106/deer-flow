@@ -15,6 +15,8 @@ export interface Translations {
     rename: string;
     share: string;
     openInNewWindow: string;
+    expandPreview: string;
+    collapsePreview: string;
     close: string;
     more: string;
     search: string;

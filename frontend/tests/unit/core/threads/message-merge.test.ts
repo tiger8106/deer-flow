@@ -37,6 +37,44 @@ function runMessage(seq?: number): RunMessage {
   };
 }
 
+test("framework ID swaps acknowledge one input without deduplicating repeated questions", () => {
+  const input = { id: "input", type: "human", content: "生成PPT" } as Message;
+  const reminder = {
+    id: "input",
+    type: "system",
+    content: "date",
+    additional_kwargs: { hide_from_ui: true },
+  } as Message;
+  const rewritten = {
+    ...input,
+    id: "input__user",
+    additional_kwargs: { deerflow_original_message_id: "input" },
+  } as Message;
+  expect(getVisibleOptimisticMessages([input], 0, 0, [reminder])).toEqual([
+    input,
+  ]);
+  expect(
+    getVisibleOptimisticMessages([input], 0, 1, [reminder, rewritten]),
+  ).toEqual([]);
+  const merged = mergeMessages([input], [reminder, rewritten], []);
+  expect(merged.filter((m) => m.type === "human")).toEqual([rewritten]);
+  const second = { ...input, id: "second" } as Message;
+  expect(
+    mergeMessages(merged, [second], []).filter((m) => m.type === "human"),
+  ).toHaveLength(2);
+  const progress = {
+    id: "progress",
+    type: "ai",
+    content: "working",
+  } as Message;
+  expect(
+    preserveSubmittedInputOrder([progress, rewritten], {
+      messageId: "input",
+      baselineIds: new Set(),
+    }),
+  ).toEqual([rewritten, progress]);
+});
+
 test("late historical rows never move a submitted input before its journal predecessors", () => {
   const messages = [
     {

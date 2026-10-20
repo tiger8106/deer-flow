@@ -64,17 +64,33 @@ test("repeated PPT turns survive partial snapshots, navigation and reload with s
     const body = route.request().postDataJSON();
     const human = body.input.messages.at(-1);
     expect(human.id).toBeTruthy();
-    const next = generatedTurn(2, human);
+    // Date/context injection replaces the submitted ID even on a later turn (midnight).
+    const next = generatedTurn(2, {
+      ...human,
+      id: `${human.id}__user`,
+      additional_kwargs: {
+        ...human.additional_kwargs,
+        deerflow_original_message_id: human.id,
+      },
+    });
+    const reminder = {
+      type: "system",
+      id: human.id,
+      content: "date",
+      additional_kwargs: { hide_from_ui: true },
+    };
     conversation.messages = [...initial, ...next];
     const events = [
       {
         event: "metadata",
         data: { run_id: "run-second", thread_id: MOCK_THREAD_ID },
       },
-      { event: "values", data: { messages: [...initial, next[1]] } },
+      { event: "values", data: { messages: [...initial, reminder, next[1]] } },
       {
         event: "values",
-        data: { messages: [...initial, next[1], next[0], ...next.slice(2)] },
+        data: {
+          messages: [...initial, reminder, next[1], next[0], ...next.slice(2)],
+        },
       },
       { event: "values", data: { messages: initial } },
       { event: "end", data: {} },
@@ -128,6 +144,68 @@ test("repeated PPT turns survive partial snapshots, navigation and reload with s
   await expect(page.getByTestId("conversation-artifacts")).toHaveCount(2);
 });
 
+test("first input survives context rewriting and an identical later question remains distinct", async ({
+  page,
+}) => {
+  const conversation = {
+    thread_id: MOCK_THREAD_ID,
+    title: "重复输入验证",
+    messages: [] as Record<string, unknown>[],
+  };
+  mockLangGraphAPI(page, { threads: [conversation] });
+  let turn = 0;
+  await page.route("**/api/langgraph/threads/*/runs/stream", async (route) => {
+    const human = route.request().postDataJSON().input.messages.at(-1);
+    const reminder = {
+      type: "system",
+      id: human.id,
+      content: "date",
+      additional_kwargs: { hide_from_ui: true },
+    };
+    const next = generatedTurn(++turn, {
+      ...human,
+      id: `${human.id}__user`,
+      additional_kwargs: { deerflow_original_message_id: human.id },
+    });
+    const prior = conversation.messages;
+    conversation.messages = [...prior, ...next];
+    const events = [
+      {
+        event: "metadata",
+        data: { run_id: `run-${turn}`, thread_id: MOCK_THREAD_ID },
+      },
+      { event: "values", data: { messages: [...prior, reminder, next[1]] } },
+      { event: "values", data: { messages: [...prior, reminder, ...next] } },
+      { event: "end", data: {} },
+    ];
+    await route.fulfill({
+      contentType: "text/event-stream",
+      body: events
+        .map(
+          (event) =>
+            `event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`,
+        )
+        .join(""),
+    });
+  });
+  await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
+  for (let index = 1; index <= 2; index++) {
+    const input = page.locator("textarea[name='message']");
+    await input.fill("将图片转换成PPT");
+    await input.press("Enter");
+    await expect(
+      page.getByText(`第${index}份演示文稿已完成。`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("将图片转换成PPT", { exact: true }),
+    ).toHaveCount(index);
+  }
+  await page.reload();
+  await expect(page.getByText("将图片转换成PPT", { exact: true })).toHaveCount(
+    2,
+  );
+});
+
 for (const width of [1440, 390]) {
   test(`PPT preview shares the closable document pane at width ${width}`, async ({
     page,
@@ -158,7 +236,17 @@ for (const width of [1440, 390]) {
       route.fulfill({
         status: 200,
         contentType: "text/html",
-        body: "<p>Knowledge document preview</p>",
+        body: `<p id="title">Knowledge document preview</p><script>
+          addEventListener('message', event => {
+            if (event.source !== parent || event.origin !== location.origin) return;
+            if (event.data.type === 'deerflow:external-preview:host') {
+              document.querySelector('#title').hidden = true;
+              parent.postMessage({type: 'deerflow:external-preview:state', navigationUrl: location.href,
+                title: '超长文档标题'.repeat(30), downloadUrl: '/images/tiger-logo.png?version=2'}, location.origin);
+            }
+          });
+          parent.postMessage({type: 'deerflow:external-preview:ready'}, location.origin);
+        </script>`,
       }),
     );
     await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
@@ -168,6 +256,15 @@ for (const width of [1440, 390]) {
     await card.click();
     await expect(page.locator('iframe[title="能源架构-1.pptx"]')).toBeVisible();
     await page
+      .getByRole("button", { name: "Expand preview", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Collapse preview", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Collapse preview", exact: true })
+      .click();
+    await page
       .getByRole("button", { name: "Close", exact: true })
       .last()
       .click();
@@ -176,6 +273,34 @@ for (const width of [1440, 390]) {
     );
     await page.getByRole("link", { name: "来源预览", exact: true }).click();
     await expect(page.locator('iframe[src*="source-fixture"]')).toBeVisible();
+    const title = page
+      .locator("span[title]")
+      .filter({ hasText: "超长文档标题" });
+    await expect(title).toBeVisible();
+    const download = page.getByRole("button", {
+      name: "Download",
+      exact: true,
+    });
+    await expect(download).toBeVisible();
+    await expect
+      .poll(async () => {
+        const titleBox = await title.boundingBox();
+        const buttonBox = await download.boundingBox();
+        return !!(
+          titleBox &&
+          buttonBox &&
+          titleBox.x + titleBox.width <= buttonBox.x &&
+          buttonBox.x + buttonBox.width <= width
+        );
+      })
+      .toBe(true);
+    const downloadEvent = page.waitForEvent("download");
+    await download.click();
+    // Native download requests bypass page.route in Chromium; use a real static file.
+    const downloaded = await downloadEvent;
+    expect(downloaded.suggestedFilename()).toBe("tiger-logo.png");
+    expect(await downloaded.failure()).toBeNull();
+    expect(page.context().pages()).toHaveLength(1);
     await page.getByRole("button", { name: /close/i }).last().click();
     await expect(page.locator('iframe[src*="source-fixture"]')).toHaveCount(0);
     await card.click();

@@ -17,6 +17,18 @@ from deerflow.agents.middlewares.dynamic_context_middleware import (
 _SYSTEM_REMINDER_TAG = "<system-reminder>"
 
 
+def test_rewritten_user_keeps_input_lineage_without_mutating_metadata():
+    original = HumanMessage(content="生成PPT", id="input", additional_kwargs={"attachments": ["image.png"]})
+    rewritten = DynamicContextMiddleware._make_reminder_and_user_messages(original, "date", "memory")
+    assert rewritten[-1].id == "input__user"
+    assert rewritten[-1].additional_kwargs["deerflow_original_message_id"] == "input"
+    assert rewritten[-1].additional_kwargs["attachments"] == ["image.png"]
+    assert "deerflow_original_message_id" not in original.additional_kwargs
+    assert all("deerflow_original_message_id" not in message.additional_kwargs for message in rewritten[:-1])
+    repeated = DynamicContextMiddleware._make_reminder_and_user_messages(rewritten[-1], "next date")
+    assert repeated[-1].additional_kwargs["deerflow_original_message_id"] == "input"
+
+
 def _make_middleware(**kwargs) -> DynamicContextMiddleware:
     return DynamicContextMiddleware(**kwargs)
 

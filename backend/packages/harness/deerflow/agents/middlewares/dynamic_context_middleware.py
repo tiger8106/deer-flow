@@ -231,7 +231,12 @@ class DynamicContextMiddleware(AgentMiddleware):
                 content=original.content,
                 id=f"{stable_id}__user",
                 name=original.name,
-                additional_kwargs=original.additional_kwargs,
+                # The UI pins submitted input before this framework ID swap.
+                # Preserve its lineage without changing LangGraph replacement semantics.
+                additional_kwargs={
+                    **original.additional_kwargs,
+                    "deerflow_original_message_id": original.additional_kwargs.get("deerflow_original_message_id") or stable_id,
+                },
             )
         )
         return messages

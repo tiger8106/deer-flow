@@ -26,6 +26,8 @@ export const enUS: Translations = {
     rename: "Rename",
     share: "Share",
     openInNewWindow: "Open in new window",
+    expandPreview: "Expand preview",
+    collapsePreview: "Collapse preview",
     close: "Close",
     more: "More",
     search: "Search",

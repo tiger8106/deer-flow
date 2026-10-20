@@ -5,7 +5,8 @@ import {
   EyeIcon,
   LoaderIcon,
   PackageIcon,
-  SquareArrowOutUpRightIcon,
+  Maximize2Icon,
+  Minimize2Icon,
   XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -58,6 +59,8 @@ import { cn } from "@/lib/utils";
 
 import { ArtifactLink } from "../citations/artifact-link";
 import { CitationSourcesPanel } from "../citations/citation-sources-panel";
+import { useExternalPreview } from "../external-preview";
+import { downloadPreviewFile } from "../external-preview/controls";
 import { useThread } from "../messages/context";
 import { Tooltip } from "../tooltip";
 
@@ -77,6 +80,7 @@ export function ArtifactFileDetail({
   threadId: string;
 }) {
   const { t } = useI18n();
+  const { fullscreen, setFullscreen } = useExternalPreview();
   const { user } = useAuth();
   const isAdmin = user?.system_role === "admin";
   const { artifacts, setOpen, select } = useArtifacts();
@@ -215,14 +219,16 @@ export function ArtifactFileDetail({
     <Artifact className={cn(className)}>
       <ArtifactHeader className="px-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <ArtifactTitle>
+          <ArtifactTitle className="min-w-0 flex-1">
             {isWriteFile ? (
-              <div className="px-2">{getFileName(filepath)}</div>
+              <div className="truncate px-2" title={getFileName(filepath)}>
+                {getFileName(filepath)}
+              </div>
             ) : (
               <Select value={filepath} onValueChange={select}>
                 <SelectTrigger
                   title={getFileName(filepath)}
-                  className="max-w-full min-w-0 border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0"
+                  className="w-full max-w-full min-w-0 border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0 [&_[data-slot=select-value]]:truncate"
                 >
                   <SelectValue placeholder="Select a file" />
                 </SelectTrigger>
@@ -239,7 +245,7 @@ export function ArtifactFileDetail({
             )}
           </ArtifactTitle>
         </div>
-        <div className="flex min-w-0 grow items-center justify-center">
+        <div className="flex shrink-0 items-center justify-center">
           {artifactViewState.canPreview && (
             <ToggleGroup
               className="mx-auto"
@@ -280,17 +286,14 @@ export function ArtifactFileDetail({
             )}
             {!isWriteFile && (
               <ArtifactAction
-                icon={SquareArrowOutUpRightIcon}
-                label={t.common.openInNewWindow}
-                tooltip={t.common.openInNewWindow}
-                onClick={() => {
-                  const w = window.open(
-                    urlOfArtifact({ filepath, threadId, isMock }),
-                    "_blank",
-                    "noopener,noreferrer",
-                  );
-                  if (w) w.opener = null;
-                }}
+                icon={fullscreen ? Minimize2Icon : Maximize2Icon}
+                label={
+                  fullscreen ? t.common.collapsePreview : t.common.expandPreview
+                }
+                tooltip={
+                  fullscreen ? t.common.collapsePreview : t.common.expandPreview
+                }
+                onClick={() => setFullscreen(!fullscreen)}
               />
             )}
             {isCodeFile && (
@@ -322,17 +325,15 @@ export function ArtifactFileDetail({
                 label={t.common.download}
                 tooltip={t.common.download}
                 onClick={() => {
-                  const w = window.open(
+                  downloadPreviewFile(
                     urlOfArtifact({
                       filepath,
                       threadId,
                       download: true,
                       isMock,
                     }),
-                    "_blank",
-                    "noopener,noreferrer",
+                    getFileName(filepath),
                   );
-                  if (w) w.opener = null;
                 }}
               />
             )}
@@ -422,8 +423,7 @@ function ArtifactDownloadFallback({
               download: true,
               isMock,
             })}
-            target="_blank"
-            rel="noopener noreferrer"
+            download={filename}
           >
             <DownloadIcon className="size-4" />
             Download
