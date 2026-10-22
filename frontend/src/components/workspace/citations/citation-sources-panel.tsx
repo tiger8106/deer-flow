@@ -18,6 +18,8 @@ import { writeTextToClipboard } from "@/core/clipboard";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
+import { PreviewLink } from "../external-preview/preview-link";
+
 export function CitationSourcesPanel({
   className,
   sources,
@@ -50,7 +52,7 @@ export function CitationSourcesPanel({
             <span className="text-muted-foreground w-5 shrink-0 text-right tabular-nums">
               {index + 1}
             </span>
-            <a
+            <PreviewLink
               href={source.url}
               target="_blank"
               rel="noopener noreferrer"
@@ -70,7 +72,7 @@ export function CitationSourcesPanel({
                 {t.citations.citeCount(source.count)}
               </span>
               <ExternalLinkIcon className="text-muted-foreground size-3.5 shrink-0" />
-            </a>
+            </PreviewLink>
             <CitationSourceCopyButton source={source} />
           </li>
         ))}

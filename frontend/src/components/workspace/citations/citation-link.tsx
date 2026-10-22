@@ -13,14 +13,13 @@ import {
 } from "@/core/citations/side-panel-preview";
 import { cn } from "@/lib/utils";
 
-import { useMaybeExternalPreview } from "../external-preview";
+import { PreviewLink } from "../external-preview/preview-link";
 
 export function CitationLink({
   href,
   children,
   ...props
 }: ComponentProps<"a">) {
-  const externalPreview = useMaybeExternalPreview();
   const domain = extractDomain(href ?? "");
 
   // Priority: children > domain
@@ -40,22 +39,12 @@ export function CitationLink({
   return (
     <HoverCard closeDelay={0} openDelay={0}>
       <HoverCardTrigger asChild>
-        <a
-          href={href}
-          target={opensSidePanel ? undefined : "_blank"}
-          rel={opensSidePanel ? undefined : "noopener noreferrer"}
-          className="inline-flex items-center"
-          onClick={(event) => {
-            event.stopPropagation();
-            if (opensSidePanel && href && externalPreview) {
-              event.preventDefault();
-              externalPreview.open({
-                url: href,
-                title: sourceTitle || domain || "Preview",
-              });
-            }
-          }}
+        <PreviewLink
           {...props}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center"
         >
           <Badge
             variant="outline"
@@ -64,7 +53,7 @@ export function CitationLink({
             {displayText}
             <ExternalLinkIcon className="size-3" />
           </Badge>
-        </a>
+        </PreviewLink>
       </HoverCardTrigger>
       <HoverCardContent className={cn("relative w-80 p-0", props.className)}>
         <div className="p-3">
@@ -80,7 +69,7 @@ export function CitationLink({
               </p>
             )}
           </div>
-          <a
+          <PreviewLink
             href={href}
             target="_blank"
             rel="noopener noreferrer"
@@ -88,7 +77,7 @@ export function CitationLink({
           >
             {opensSidePanel ? "Open preview" : "Visit source"}
             <ExternalLinkIcon className="size-3" />
-          </a>
+          </PreviewLink>
         </div>
       </HoverCardContent>
     </HoverCard>

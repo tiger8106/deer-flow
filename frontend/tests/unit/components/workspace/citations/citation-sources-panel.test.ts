@@ -87,6 +87,7 @@ describe("CitationSourcesPanel", () => {
 
     expect(html).toContain("材料接触应力.pdf");
     expect(html).not.toContain(">localhost</span>");
+    expect(html).not.toContain('target="_blank"');
   });
 });
 

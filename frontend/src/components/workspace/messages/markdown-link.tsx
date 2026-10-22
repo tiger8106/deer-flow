@@ -5,6 +5,7 @@ import { resolveArtifactURL } from "@/core/artifacts/utils";
 import { cn } from "@/lib/utils";
 
 import { CitationLink } from "../citations/citation-link";
+import { PreviewLink } from "../external-preview/preview-link";
 
 function isExternalUrl(href: string | undefined): boolean {
   return !!href && /^https?:\/\//.test(href);
@@ -53,7 +54,7 @@ export function createMarkdownLinkComponent(threadId?: string) {
     const { className, target, rel, ...rest } = props;
     const external = isExternalUrl(href);
     return (
-      <a
+      <PreviewLink
         {...rest}
         href={href}
         className={cn(
