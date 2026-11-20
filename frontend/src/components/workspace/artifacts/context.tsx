@@ -6,7 +6,6 @@ import {
   type ReactNode,
 } from "react";
 
-import { useSidebar } from "@/components/ui/sidebar";
 import { env } from "@/env";
 
 import {
@@ -53,22 +52,16 @@ function ArtifactsStateProvider({ children }: ArtifactsProviderProps) {
   const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [autoSelect, setAutoSelect] = useState(true);
   const [autoOpen, setAutoOpen] = useState(true);
-  const { setOpen: setSidebarOpen } = useSidebar();
 
   const select = useCallback(
     (artifact: string, autoSelect = false) => {
       setSelectedArtifact(artifact);
       if (!autoSelect) {
         showArtifacts();
-      }
-      if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true") {
-        setSidebarOpen(false);
-      }
-      if (!autoSelect) {
         setAutoSelect(false);
       }
     },
-    [setSidebarOpen, setSelectedArtifact, setAutoSelect, showArtifacts],
+    [showArtifacts],
   );
 
   const deselect = useCallback(() => {

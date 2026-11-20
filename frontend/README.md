@@ -128,7 +128,8 @@ Conversation artifact cards are message-group scoped through
 `additional_kwargs.presented_files`; PPT delivery cards are moved after the
 following assistant answer, and internal `review.json` files are filtered from
 that card. The cumulative thread artifact list remains available to the header
-panel and preview selector.
+panel and preview selector. On desktop, opening a file keeps the conversation
+visible and preserves the sidebar’s current state.
 
 ## Scripts
 
