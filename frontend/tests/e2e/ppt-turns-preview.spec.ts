@@ -255,6 +255,9 @@ for (const width of [1440, 390]) {
       .getByText("能源架构-1.pptx", { exact: true });
     await card.click();
     await expect(page.locator('iframe[title="能源架构-1.pptx"]')).toBeVisible();
+    await expect(
+      page.locator('iframe[title="能源架构-1.pptx"]'),
+    ).toHaveAttribute("src", /#view=FitH&pagemode=none$/);
     if (width === 1440) {
       await expect(
         page.locator('[data-slot="sidebar"][data-side="left"]'),

@@ -2,7 +2,10 @@ import { LoaderIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { loadDocumentPreview } from "@/core/artifacts/document-preview";
+import {
+  loadDocumentPreview,
+  fitPdfToWidth,
+} from "@/core/artifacts/document-preview";
 import { useI18n } from "@/core/i18n/hooks";
 
 export function DocumentPreview({
@@ -76,8 +79,8 @@ export function DocumentPreview({
   }
   return (
     <iframe
-      className="size-full border-0"
-      src={url}
+      className="block size-full border-0"
+      src={fitPdfToWidth(url)}
       title={filepath.split("/").pop()}
     />
   );

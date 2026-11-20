@@ -30,7 +30,10 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CodeEditor } from "@/components/workspace/code-editor";
-import { supportsDocumentPreview } from "@/core/artifacts/document-preview";
+import {
+  fitPdfToWidth,
+  supportsDocumentPreview,
+} from "@/core/artifacts/document-preview";
 import { useArtifactContent } from "@/core/artifacts/hooks";
 import {
   appendHtmlPreviewBaseHref,
@@ -149,6 +152,8 @@ export function ArtifactFileDetail({
     return canBrowserPreviewFile(filepath);
   }, [filepath]);
   const isDocumentPreview = !isWriteFile && supportsDocumentPreview(filepath);
+  const isPdf = /\.pdf$/i.test(filepath);
+  const browserPreviewUrl = urlOfArtifact({ filepath, threadId, isMock });
   const isSupportPreview = useMemo(() => {
     return language === "html" || language === "markdown";
   }, [language]);
@@ -346,7 +351,9 @@ export function ArtifactFileDetail({
           </ArtifactActions>
         </div>
       </ArtifactHeader>
-      <ArtifactContent className="p-0">
+      <ArtifactContent
+        className={cn("p-0", (isPdf || isDocumentPreview) && "overflow-hidden")}
+      >
         {artifactViewState.canPreview &&
           viewMode === "preview" &&
           (language === "markdown" || language === "html") && (
@@ -373,9 +380,9 @@ export function ArtifactFileDetail({
         )}
         {!isCodeFile && !isDocumentPreview && canPreviewInBrowser && (
           <iframe
-            className="size-full"
+            className="block size-full"
             title={getFileName(filepath)}
-            src={urlOfArtifact({ filepath, threadId, isMock })}
+            src={isPdf ? fitPdfToWidth(browserPreviewUrl) : browserPreviewUrl}
           />
         )}
         {!isCodeFile && !isDocumentPreview && !canPreviewInBrowser && (

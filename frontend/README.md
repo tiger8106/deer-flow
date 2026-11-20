@@ -129,7 +129,8 @@ Conversation artifact cards are message-group scoped through
 following assistant answer, and internal `review.json` files are filtered from
 that card. The cumulative thread artifact list remains available to the header
 panel and preview selector. On desktop, opening a file keeps the conversation
-visible and preserves the sidebar’s current state.
+visible and preserves the sidebar’s current state. Office and PDF previews start
+at page width and retain the PDF viewer’s manual zoom controls.
 
 ## Scripts
 
