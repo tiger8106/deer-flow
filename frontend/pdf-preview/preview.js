@@ -24,6 +24,10 @@ parentDocument.addEventListener("webviewerloaded", function initialize(event) {
   document.body.append(status);
   const app = window.PDFViewerApplication;
   void app.initializedPromise.then(() => {
+    // Fit against the scrollable viewport before loading the first page.
+    // PDF.js otherwise subtracts 40px even after its CSS border is removed.
+    app.pdfViewer.removePageBorders = true;
+    app.pdfViewer.viewer.classList.add("removePageBorders");
     app.eventBus.on(
       "pagerendered",
       ({ source, error, cssTransform, isDetailView }) => {

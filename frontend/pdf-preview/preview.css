@@ -1,3 +1,17 @@
+@media screen {
+  #viewerContainer:not(.pdfPresentationMode) {
+    scrollbar-gutter: stable;
+  }
+
+  .pdfViewer.removePageBorders > .page {
+    margin-block: 0;
+  }
+
+  .pdfViewer.removePageBorders:not(.scrollHorizontal):not(.scrollWrapped) > .page + .page {
+    margin-block-start: 1px;
+  }
+}
+
 .pdfViewer .page:not(.preview-painted) > * {
   visibility: hidden;
 }

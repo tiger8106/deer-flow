@@ -266,9 +266,13 @@ for (const width of [1440, 390]) {
       await first.evaluate((element) => {
         const viewport =
           element.ownerDocument.querySelector("#viewerContainer")!;
+        const page = element.getBoundingClientRect();
+        const nextPage = element.nextElementSibling!.getBoundingClientRect();
         return (
-          element.clientWidth <= viewport.clientWidth &&
-          element.clientWidth > viewport.clientWidth * 0.8
+          Math.abs(element.clientWidth - viewport.clientWidth) <= 1 &&
+          viewport.scrollWidth === viewport.clientWidth &&
+          Math.abs(page.top - viewport.getBoundingClientRect().top) <= 1 &&
+          Math.abs(nextPage.top - page.bottom - 1) <= 1
         );
       }),
     ).toBe(true);
