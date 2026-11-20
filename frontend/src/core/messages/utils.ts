@@ -138,13 +138,9 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
         !hasToolCalls(message) &&
         !isProcessingMessage(message);
 
-      if (hasPresentFiles(message)) {
-        groups.push({
-          id: groupId,
-          type: "assistant:present-files",
-          messages: [message],
-        });
-      } else if (hasSubagent(message)) {
+      // File publication is a tool step just like generation. Keep its text
+      // and usage inside processing; the list places its files after the answer.
+      if (hasSubagent(message)) {
         groups.push({
           id: groupId,
           type: "assistant:subagent",

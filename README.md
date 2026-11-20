@@ -795,7 +795,7 @@ This is the difference between a chatbot with tool access and an agent with an a
 
 ### Context Engineering
 
-Delivered file cards (including Word, spreadsheets, PDF, and presentations) appear after the following assistant answer in the same user turn. If no answer follows, files remain accessible at their publication step.
+File-publication commentary and tool usage stay inside the thinking panel. Delivered file cards (including Word, spreadsheets, PDF, and presentations) appear after the following assistant answer in the same user turn. If no answer follows, files remain accessible at their publication step.
 
 Conversation titles summarize the completed answer and descriptive artifact metadata in the selected UI language. The `title.model_name` setting optionally selects a dedicated title model; otherwise the default model is used. If generation fails or takes longer than 10 seconds, a local fallback is used. Existing manual titles are preserved.
 

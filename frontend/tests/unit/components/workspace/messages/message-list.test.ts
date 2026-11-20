@@ -7,7 +7,7 @@ import {
   getArtifactPathsForGroups,
   shouldScrollToLatestOnSubmit,
 } from "@/components/workspace/messages/message-list";
-import type { MessageGroup } from "@/core/messages/utils";
+import { getMessageGroups, type MessageGroup } from "@/core/messages/utils";
 
 describe("MessageList submission scrolling", () => {
   it("scrolls when a new submission starts", () => {
@@ -268,4 +268,54 @@ describe("Format-independent delivery", () => {
       ["next.zip"],
     ]);
   });
+});
+
+describe("File publication grouping", () => {
+  for (const ext of ["docx", "xlsx", "pdf", "csv", "png", "zip", "pptx"]) {
+    it(`keeps ${ext} publication text and usage in thinking with files after the answer`, () => {
+      const path = `/mnt/user-data/outputs/report.${ext}`;
+      const progress: Message = {
+        id: "progress",
+        type: "ai",
+        content: "正在生成文件",
+        additional_kwargs: { deerflow_processing: true },
+      };
+      const publication: Message = {
+        id: "publish",
+        type: "ai",
+        content: "文档已成功生成，文件大小约42KB。现在让我呈现给用户。",
+        tool_calls: [
+          { id: "present", name: "present_files", args: { filepaths: [path] } },
+        ],
+        usage_metadata: {
+          input_tokens: 100,
+          output_tokens: 20,
+          total_tokens: 120,
+        },
+      };
+      const result: Message = {
+        id: "result",
+        type: "tool",
+        tool_call_id: "present",
+        content: "ready",
+        additional_kwargs: { presented_files: [path] },
+      };
+      const answer: Message = {
+        id: "answer",
+        type: "ai",
+        content: "已完成整理。",
+      };
+      const groups = getMessageGroups([progress, publication, result, answer]);
+      expect(groups.map((group) => group.type)).toEqual([
+        "assistant:processing",
+        "assistant",
+      ]);
+      expect(groups[0]?.messages).toEqual([progress, publication, result]);
+      expect(getArtifactPathsForGroups(groups)).toEqual([[], [path]]);
+      // Interrupted runs still expose the file, while preserving progress text.
+      const interrupted = getMessageGroups([progress, publication, result]);
+      expect(interrupted[0]?.messages).toEqual([progress, publication, result]);
+      expect(getArtifactPathsForGroups(interrupted)).toEqual([[path]]);
+    });
+  }
 });

@@ -97,6 +97,27 @@ describe("MessageGroup", () => {
       "Compare the source figures.",
     );
   });
+  it("keeps publication commentary inside the collapsible thinking panel", () => {
+    const publication: Message[] = [
+      {
+        id: "publish",
+        type: "ai",
+        content: "文档已成功生成，文件大小约42KB。现在让我呈现给用户。",
+        tool_calls: [
+          {
+            id: "present",
+            name: "present_files",
+            args: { filepaths: ["/mnt/user-data/outputs/report.docx"] },
+          },
+        ],
+      },
+    ];
+    const expanded = renderGroup(publication, {}, true).replace(/<[^>]*>/g, "");
+    expect(expanded).toContain("文档已成功生成");
+    const collapsed = renderGroup(publication);
+    expect(collapsed).toContain('aria-expanded="false"');
+    expect(collapsed).not.toContain("文档已成功生成");
+  });
   it("preserves friendly business tool labels", () => {
     const html = renderGroup(
       [
