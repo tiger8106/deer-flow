@@ -795,6 +795,8 @@ This is the difference between a chatbot with tool access and an agent with an a
 
 ### Context Engineering
 
+Delivered file cards (including Word, spreadsheets, PDF, and presentations) appear after the following assistant answer in the same user turn. If no answer follows, files remain accessible at their publication step.
+
 Conversation titles summarize the completed answer and descriptive artifact metadata in the selected UI language. The `title.model_name` setting optionally selects a dedicated title model; otherwise the default model is used. If generation fails or takes longer than 10 seconds, a local fallback is used. Existing manual titles are preserved.
 
 **Isolated Sub-Agent Context**: Each sub-agent runs in its own isolated context. This means that the sub-agent will not be able to see the context of the main agent or other sub-agents. This is important to ensure that the sub-agent is able to focus on the task at hand and not be distracted by the context of the main agent or other sub-agents.

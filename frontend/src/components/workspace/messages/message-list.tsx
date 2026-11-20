@@ -48,7 +48,6 @@ import {
   extractTextFromMessage,
   getAssistantTurnCopyData,
   getAssistantTurnUsageMessages,
-  isPptDeliveryMessage,
   isPptReviewArtifactPath,
   getMessageGroups,
   getActiveTurnStartIndex,
@@ -146,14 +145,14 @@ export function getArtifactPathsForGroups(
     getArtifactPathsForGroup(group.messages),
   );
 
-  // finish_ppt is a tool result, so it naturally lands in the thinking group.
-  // Move only PPT delivery files to the next completed assistant bubble; this
-  // keeps the ordinary answer first while preserving the existing placement of
-  // other tools' artifacts.
+  // Publication tools run before the answer, regardless of file format. Attach
+  // cards to the following answer within this user turn. Without an answer
+  // (including interrupted runs), keep the files accessible in place.
   groups.forEach((group, groupIndex) => {
     if (
       pathsByGroup[groupIndex]?.length === 0 ||
-      !group.messages.some(isPptDeliveryMessage)
+      group.type === "human" ||
+      group.type === "assistant"
     ) {
       return;
     }

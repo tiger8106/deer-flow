@@ -174,3 +174,98 @@ describe("Conversation artifact placement", () => {
     ]);
   });
 });
+
+describe("Format-independent delivery", () => {
+  const answer: MessageGroup = {
+    id: "answer",
+    type: "assistant",
+    messages: [{ type: "ai", content: "完成。" }],
+  };
+  const human: MessageGroup = {
+    id: "human",
+    type: "human",
+    messages: [{ type: "human", content: "下一轮" }],
+  };
+  function delivery(paths: string[], metadata = false): MessageGroup {
+    return {
+      id: "delivery",
+      type: metadata ? "assistant:processing" : "assistant:present-files",
+      messages: metadata
+        ? [
+            {
+              type: "tool",
+              name: "publish",
+              tool_call_id: "publish",
+              content: "ready",
+              additional_kwargs: { presented_files: paths },
+            },
+          ]
+        : [
+            {
+              type: "ai",
+              content: "",
+              tool_calls: [
+                {
+                  id: "present",
+                  name: "present_files",
+                  args: { filepaths: paths },
+                },
+              ],
+            },
+          ],
+    };
+  }
+  for (const ext of [
+    "docx",
+    "doc",
+    "xlsx",
+    "xls",
+    "pdf",
+    "csv",
+    "txt",
+    "md",
+    "html",
+    "png",
+    "zip",
+    "odt",
+    "ods",
+    "odp",
+    "pptx",
+  ]) {
+    for (const metadata of [false, true]) {
+      it(`places ${ext} after answer (metadata: ${metadata})`, () => {
+        const path = `/mnt/user-data/outputs/result.${ext}`;
+        expect(
+          getArtifactPathsForGroups([delivery([path], metadata), answer]),
+        ).toEqual([[], [path]]);
+      });
+    }
+  }
+  it("keeps files accessible without an answer and never crosses user turns", () => {
+    expect(getArtifactPathsForGroups([delivery(["report.docx"])])).toEqual([
+      ["report.docx"],
+    ]);
+    expect(
+      getArtifactPathsForGroups([delivery(["report.docx"]), human, answer]),
+    ).toEqual([["report.docx"], [], []]);
+  });
+  it("deduplicates mixed deliveries without moving prior answer cards", () => {
+    expect(
+      getArtifactPathsForGroups([
+        delivery(["report.docx", "table.xlsx"]),
+        delivery(["report.docx", "report.pdf"], true),
+        answer,
+        human,
+        delivery(["next.zip"]),
+        answer,
+      ]),
+    ).toEqual([
+      [],
+      [],
+      ["report.docx", "table.xlsx", "report.pdf"],
+      [],
+      [],
+      ["next.zip"],
+    ]);
+  });
+});
