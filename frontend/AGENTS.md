@@ -125,7 +125,9 @@ Tool-calling AI messages can contain user-visible text as well as `tool_calls`. 
   `?preview=true`; `artifacts/document-preview.tsx` owns timeout, abort,
   retry, and blob cleanup. The producer contract is documented in
   `backend/docs/ARTIFACT_PREVIEW.md`; domain-specific generation stays outside
-  DeerFlow.
+  DeerFlow. PDF and rendered Office artifacts use the same self-hosted PDF.js
+  viewer. `pdf-preview/prepare.mjs` prepares the static assets at dev/build
+  time. The embedding iframe supplies the authorized file via `data-pdf-source`.
 - `DEER_FLOW_WORKSPACE_APPS` is a deployment-owned JSON array consumed by the
   server layout. `core/workspace-apps` validates it, `/workspace/[app_id]`
   renders the iframe, and the sidebar renders its configured entries. Apps may

@@ -229,7 +229,7 @@ for (const width of [1440, 390]) {
       route.fulfill({
         status: 200,
         contentType: "application/pdf",
-        body: "%PDF-1.4\n%%EOF",
+        path: "tests/e2e/fixtures/two-pages.pdf",
       }),
     );
     await page.route("**/source-fixture?*", (route) =>
@@ -257,7 +257,26 @@ for (const width of [1440, 390]) {
     await expect(page.locator('iframe[title="能源架构-1.pptx"]')).toBeVisible();
     await expect(
       page.locator('iframe[title="能源架构-1.pptx"]'),
-    ).toHaveAttribute("src", /#view=FitH&pagemode=none$/);
+    ).toHaveAttribute("src", /#page=1&zoom=page-width&pagemode=none$/);
+    const viewer = page.frameLocator('iframe[title="能源架构-1.pptx"]');
+    const first = viewer.locator('.page[data-page-number="1"].preview-painted');
+    await expect(first.locator("canvas").first()).toBeVisible();
+    await expect(viewer.locator("#preview-status")).toBeHidden();
+    expect(
+      await first.evaluate((element) => {
+        const viewport =
+          element.ownerDocument.querySelector("#viewerContainer")!;
+        return (
+          element.clientWidth <= viewport.clientWidth &&
+          element.clientWidth > viewport.clientWidth * 0.8
+        );
+      }),
+    ).toBe(true);
+    await viewer.locator("#pageNumber").fill("2");
+    await viewer.locator("#pageNumber").press("Enter");
+    await expect(
+      viewer.locator('.page[data-page-number="2"] .textLayer'),
+    ).toContainText("Page two");
     if (width === 1440) {
       await expect(
         page.locator('[data-slot="sidebar"][data-side="left"]'),

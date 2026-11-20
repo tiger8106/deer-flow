@@ -1,9 +1,7 @@
 import { urlOfArtifact } from "./utils";
 
-// Set the initial PDF view while leaving subsequent zoom and scrolling to the viewer.
-export function fitPdfToWidth(url: string) {
-  return `${url}#view=FitH&pagemode=none`;
-}
+export const PDF_VIEWER_URL =
+  "/pdf-preview/web/viewer.html#page=1&zoom=page-width&pagemode=none";
 
 export function supportsDocumentPreview(filepath: string) {
   return /\.(pptx?|odp|docx?|odt|xlsx?|ods)$/i.test(filepath);

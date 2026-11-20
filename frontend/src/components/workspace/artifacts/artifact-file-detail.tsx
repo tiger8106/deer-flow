@@ -31,7 +31,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CodeEditor } from "@/components/workspace/code-editor";
 import {
-  fitPdfToWidth,
+  PDF_VIEWER_URL,
   supportsDocumentPreview,
 } from "@/core/artifacts/document-preview";
 import { useArtifactContent } from "@/core/artifacts/hooks";
@@ -153,7 +153,13 @@ export function ArtifactFileDetail({
   }, [filepath]);
   const isDocumentPreview = !isWriteFile && supportsDocumentPreview(filepath);
   const isPdf = /\.pdf$/i.test(filepath);
-  const browserPreviewUrl = urlOfArtifact({ filepath, threadId, isMock });
+  const browserPreviewUrl = urlOfArtifact({
+    filepath: isPdf
+      ? filepath.split("/").map(encodeURIComponent).join("/")
+      : filepath,
+    threadId,
+    isMock,
+  });
   const isSupportPreview = useMemo(() => {
     return language === "html" || language === "markdown";
   }, [language]);
@@ -382,7 +388,9 @@ export function ArtifactFileDetail({
           <iframe
             className="block size-full"
             title={getFileName(filepath)}
-            src={isPdf ? fitPdfToWidth(browserPreviewUrl) : browserPreviewUrl}
+            key={browserPreviewUrl}
+            data-pdf-source={isPdf ? browserPreviewUrl : undefined}
+            src={isPdf ? PDF_VIEWER_URL : browserPreviewUrl}
           />
         )}
         {!isCodeFile && !isDocumentPreview && !canPreviewInBrowser && (

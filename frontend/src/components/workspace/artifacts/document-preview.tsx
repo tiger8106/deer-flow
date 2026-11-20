@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   loadDocumentPreview,
-  fitPdfToWidth,
+  PDF_VIEWER_URL,
 } from "@/core/artifacts/document-preview";
 import { useI18n } from "@/core/i18n/hooks";
 
@@ -80,7 +80,8 @@ export function DocumentPreview({
   return (
     <iframe
       className="block size-full border-0"
-      src={fitPdfToWidth(url)}
+      data-pdf-source={url}
+      src={PDF_VIEWER_URL}
       title={filepath.split("/").pop()}
     />
   );

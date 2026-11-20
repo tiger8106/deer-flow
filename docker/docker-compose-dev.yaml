@@ -116,6 +116,7 @@ services:
     volumes:
       - ../frontend/src:/app/frontend/src
       - ../frontend/public:/app/frontend/public
+      - ../frontend/pdf-preview:/app/frontend/pdf-preview:ro
       - ../frontend/next.config.js:/app/frontend/next.config.js:ro
       - ../logs:/app/logs
       # Mount pnpm store for caching

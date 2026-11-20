@@ -1,0 +1,12 @@
+.pdfViewer .page:not(.preview-painted) > * {
+  visibility: hidden;
+}
+
+#preview-status {
+  position: fixed;
+  inset: 50% 1rem auto;
+  text-align: center;
+  font: 14px system-ui, sans-serif;
+  color: CanvasText;
+  pointer-events: none;
+}

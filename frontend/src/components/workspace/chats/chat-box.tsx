@@ -17,6 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { supportsDocumentPreview } from "@/core/artifacts/document-preview";
 import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -143,6 +144,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       : artifactPanelOpen
         ? "artifacts"
         : null;
+  // A PDF measures its viewport on first paint, so open at the final width
+  // and let the existing opacity transition reveal the pane.
+  const openingPdf =
+    activeRightPanel === "artifacts" &&
+    selectedArtifact &&
+    (/\.pdf$/i.test(selectedArtifact) ||
+      supportsDocumentPreview(selectedArtifact));
   const rightPanelOpen = activeRightPanel !== null;
   const [renderedRightPanel, setRenderedRightPanel] =
     useState<RightPanelKind | null>(activeRightPanel);
@@ -491,7 +499,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       id={`${resizableIdBase}-panels`}
       className={cn(
         "[container-type:inline-size] relative grid size-full min-h-0 overflow-x-clip transition-[grid-template-columns] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-        isResizingPreview && "transition-none",
+        (isResizingPreview || openingPdf) && "transition-none",
         rightPanelOpen
           ? "grid-cols-[minmax(0,1fr)_1px_minmax(0,40%)]"
           : "grid-cols-[minmax(0,1fr)_0px_0px]",
